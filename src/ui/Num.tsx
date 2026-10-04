@@ -4,24 +4,12 @@
  *
  * The strings are memoized per rendered number (GDD §21.4): each `<Num>` in a row formats again
  * only when its value changes, compared by its components, since the view builds new `Num`
- * objects on every derive. When the formatter gains settings (notation, precision; M3), they
- * join the memo key.
+ * objects on every derive, or when the player's Numbers settings (notation, precision, integer
+ * threshold, from `FormatContext`) change.
  */
-import { useMemo } from 'preact/hooks';
+import { useContext, useMemo } from 'preact/hooks';
 import type { Num as NumValue } from '../engine/num.ts';
-import { fmt } from './fmt.ts';
-
-const VISUALLY_HIDDEN = {
-  position: 'absolute',
-  width: '1px',
-  height: '1px',
-  padding: '0',
-  margin: '-1px',
-  overflow: 'hidden',
-  clip: 'rect(0, 0, 0, 0)',
-  whiteSpace: 'nowrap',
-  border: '0',
-} as const;
+import { FormatContext, fmt } from './fmt.ts';
 
 export interface NumProps {
   readonly value: NumValue | number;
@@ -31,19 +19,20 @@ export interface NumProps {
 const PLAIN = -1;
 
 export function Num({ value }: NumProps) {
+  const opts = useContext(FormatContext);
   const plain = typeof value === 'number';
   const k0 = plain ? value : value.sign;
   const k1 = plain ? PLAIN : value.layer;
   const k2 = plain ? 0 : value.mag;
   const { text, spoken } = useMemo(
-    () => ({ text: fmt.format(value), spoken: fmt.spoken(value) }),
-    [k0, k1, k2],
+    () => ({ text: fmt.format(value, opts), spoken: fmt.spoken(value, opts) }),
+    [k0, k1, k2, opts.notation, opts.precision, opts.intThreshold],
   );
   if (spoken === text) return <span class="num">{text}</span>;
   return (
     <span class="num">
       <span aria-hidden={true}>{text}</span>
-      <span style={VISUALLY_HIDDEN}>{spoken}</span>
+      <span class="sr-only">{spoken}</span>
     </span>
   );
 }

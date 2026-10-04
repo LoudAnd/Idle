@@ -58,6 +58,7 @@ export function stepOf(bought: number): number {
 }
 
 const BETA_NUM: Num = Object.freeze(num(BETA));
+const BETA_PARAMS = Object.freeze({ b: BETA });
 
 /**
  * The Sum factors of m_k = β · g^L · slot_k (§5.1). All are event-constant: they change only
@@ -71,6 +72,8 @@ export const SUM_EFFECTS: readonly EffectDef[] = Object.freeze([
     kind: 'mul',
     class: 'event',
     label: 'factor.beta',
+    // `β {b}`: the base production β (M3's breakdown row).
+    labelParams: () => BETA_PARAMS,
     value: () => BETA_NUM,
   }),
   Object.freeze({
@@ -80,6 +83,8 @@ export const SUM_EFFECTS: readonly EffectDef[] = Object.freeze([
     kind: 'mul',
     class: 'event',
     label: 'factor.global',
+    // `global {g}^{l}`: the base g and the level L (`global 1.15^12`, GDD §17.4).
+    labelParams: (s: GameState) => ({ g: GLOBAL_BASE, l: s.sum.globalLevel }),
     value: (s: GameState) => globalMultiplier(s.sum.globalLevel),
   }),
   Object.freeze({

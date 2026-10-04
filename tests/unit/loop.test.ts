@@ -14,6 +14,7 @@ import {
   GAP_MS,
   MAX_TICKS_PER_FRAME,
   UI_FPS,
+  clampUiFps,
   createGameLoop,
   planFrame,
 } from '../../src/platform/loop.ts';
@@ -136,6 +137,57 @@ describe('the game loop (GDD §21.4)', () => {
     expect(derivedCount() - before).toBeLessThanOrEqual(UI_FPS + 1);
     expect(derivedCount() - before).toBeGreaterThanOrEqual(UI_FPS - 1);
     expect(notified).toBe(derivedCount() - before);
+  });
+
+  it('setUiFps changes the derive rate, clamped to [10, 60] (GDD §19, §21.4)', () => {
+    const { clock, loop, derivedCount } = loopOn();
+    loop.start();
+    expect(loop.uiFps).toBe(UI_FPS);
+    for (const fps of [15, 60]) {
+      loop.setUiFps(fps);
+      expect(loop.uiFps).toBe(fps);
+      const before = derivedCount();
+      clock.advance(1000, 1000 / 120);
+      expect(derivedCount() - before).toBeLessThanOrEqual(fps + 1);
+      expect(derivedCount() - before).toBeGreaterThanOrEqual(fps - 1);
+    }
+    expect(clampUiFps(5)).toBe(10);
+    expect(clampUiFps(500)).toBe(60);
+    expect(clampUiFps(Number.NaN)).toBe(UI_FPS);
+    expect(clampUiFps(Number.POSITIVE_INFINITY)).toBe(UI_FPS);
+    loop.setUiFps(Number.NaN);
+    expect(loop.uiFps).toBe(UI_FPS);
+  });
+
+  it('observe sees the state at every tick boundary, before the tick applies its actions', () => {
+    const clock = createFakeClock();
+    const seen: number[] = [];
+    const loop = createGameLoop({
+      clock,
+      derive: (s) => s.sum.x.toNumber(),
+      observe: (s) => seen.push(s.sum.bought[0]),
+      initial: makeState({ x: 100 }),
+    });
+    loop.start();
+    loop.enqueue({ type: 'buy', tier: 1, mode: 'one' });
+    clock.frame(150); // three ticks: the first applies the purchase
+    // b1 = 0 before the first tick's purchase, then 1 before each later tick.
+    expect(seen).toEqual([0, 1, 1]);
+  });
+
+  it('a throwing observe is a view fault: the loop pauses', () => {
+    const clock = createFakeClock();
+    const loop = createGameLoop({
+      clock,
+      derive: () => 0,
+      observe: () => {
+        throw new Error('observe');
+      },
+    });
+    loop.start();
+    clock.frame(50);
+    expect(loop.hub.fault?.kind).toBe('view');
+    expect(loop.running).toBe(false);
   });
 
   it('stop() stops frames; start() resumes without counting the stopped time', () => {

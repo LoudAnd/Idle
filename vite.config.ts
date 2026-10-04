@@ -8,6 +8,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // The font files always ship as files (GDD §16.5): the Greek woff2 files (4.2 KB) are just
+    // above Vite's 4,096 B default inline limit, so a later version could otherwise inline them.
+    assetsInlineLimit: (file: string) => (file.endsWith('.woff2') ? false : undefined),
   },
   test: {
     environment: 'jsdom',

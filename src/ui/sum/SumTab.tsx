@@ -1,34 +1,54 @@
 /**
- * The Sum tab (GDD §5, M2): plain rows of amount (with the bought count, §17.3), multiplier,
- * Buy 1, Until 10 and Max; the global level; Max all; x. M3 replaces the rows with the full
- * generator row (§17.3) and the reveal rule (§17.4); the `data-tier`, `data-mode`, `data-x`,
- * `data-amount`, `data-bought` and `data-level` hooks stay for the playtests.
+ * The Sum tab (GDD §5, §17.3, §17.4): the generator rows that are revealed (`GeneratorRow.tsx`),
+ * the global row by the same silhouette rule, Max all once revealed (floating up to 640 px), and
+ * at most one open breakdown. The `data-tier`, `data-global`, `data-mode`, `data-amount`,
+ * `data-bought` and `data-level` hooks of M2 stay for the playtests.
  *
  * - Column headers come from `strings.ts`; the cost header cites λ's A-number (§5.2).
- * - Each button's accessible name starts with its row's header ("Generator 3 Max"), through
- *   `aria-labelledby`, so the names are templated, never literal attributes (§2, §18).
- * - `paused` (after a fault, §21.8) disables every buy control, so the recovery panel is the only
- *   thing that can be acted on.
- * - `SumTab.css` gives the columns fixed widths (no sideways jumps as numbers grow) and turns
- *   rows into 2-line cards below 640 px (§17.6: no horizontal scroll at 375 px).
+ * - Max all shows its status like every buy button (§17.3): ✓ when it buys something,
+ *   otherwise `≈ t` until the cheapest next purchase of a shown row.
+ * - New rows and Max all fade in once (`data-reveal`, 150 ms, §17.4): a row that has finished
+ *   its fade never fades again, so showing the tab after Settings does not re-fade every row.
+ * - `paused` (after a fault, §21.8) disables every control and closes the breakdown, so the
+ *   recovery panel is the only thing that can be acted on.
+ * - `SumTab.css` lays the rows out as a table with fixed column widths when the tab is wide
+ *   enough (no sideways jumps as numbers grow, §21.4) and as cards otherwise (§17.6: no
+ *   horizontal scroll at 375 px).
  */
-import { useId } from 'preact/hooks';
-import type { Action, BuyMode } from '../../engine/actions.ts';
+import { useId, useRef, useState } from 'preact/hooks';
+import type { Action } from '../../engine/actions.ts';
 import { LAMBDA_ANUMBER } from '../../engine/content/sum.ts';
-import type { Num as NumValue } from '../../engine/num.ts';
-import { Num } from '../Num.tsx';
+import type { Tier } from '../../engine/state.ts';
+import { Breakdown } from '../Breakdown.tsx';
 import { STRINGS } from '../strings.ts';
-import { fill, fillParts } from '../tpl.ts';
-import type { GlobalRowView, SumView, TierRowView } from './view.ts';
+import { fill } from '../tpl.ts';
+import { GlobalRow, Status, TierRow, rowHeaderId } from './GeneratorRow.tsx';
+import type { SumView } from './view.ts';
 import './SumTab.css';
 
-const BUY_ONE: BuyMode = 'one';
-const UNTIL_TEN: BuyMode = 'until10';
-const BUY_MAX: BuyMode = 'max';
 const MAX_ALL = 'maxAll';
 const SEP = ' · ';
 const SPACE = ' ';
-const DOT = '· ';
+/** The fade's keyframes (theme.css); only its end marks an element as seen. */
+const REVEAL_ANIMATION = 'reveal-in';
+
+/**
+ * Fade-once bookkeeping: `fresh(key)` is true until the element's reveal fade has ended
+ * (`onFaded`). The set lives as long as the tab is mounted.
+ */
+function useFadeOnce() {
+  const seen = useRef(new Set<string>());
+  return {
+    fresh: (key: string): boolean => !seen.current.has(key),
+    onFaded:
+      (key: string) =>
+      (e: AnimationEvent): void => {
+        if (e.target === e.currentTarget && e.animationName === REVEAL_ANIMATION) {
+          seen.current.add(key);
+        }
+      },
+  };
+}
 
 export interface SumTabProps {
   readonly view: SumView;
@@ -37,195 +57,117 @@ export interface SumTabProps {
   readonly paused?: boolean;
 }
 
-interface BuyButtonProps {
-  /** The id of the row header the accessible name starts with. */
-  readonly rowId: string;
-  readonly mode: string;
-  readonly label: string;
-  /** The cost shown after the label, if any. */
-  readonly cost?: NumValue;
-  readonly disabled: boolean;
-  readonly onClick: () => void;
-}
-
-/** A buy button: "label · cost", named "<row header> label · cost" for screen readers. */
-function BuyButton({ rowId, mode, label, cost, disabled, onClick }: BuyButtonProps) {
-  const id = `${rowId}-${mode}`;
-  return (
-    <button
-      type="button"
-      id={id}
-      data-mode={mode}
-      aria-labelledby={`${rowId} ${id}`}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <span class="label">{label}</span>
-      {cost !== undefined && (
-        <>
-          {/* The one wrap point: "Until 10" / "· 2.47e38", never the dot alone. */}
-          {SPACE}
-          <span class="cost">
-            {DOT}
-            <Num value={cost} />
-          </span>
-        </>
-      )}
-    </button>
-  );
-}
-
-interface RowProps<R> {
-  readonly row: R;
-  readonly enqueue: (a: Action) => void;
-  readonly paused: boolean;
-}
-
-function TierRow({ row, enqueue, paused }: RowProps<TierRowView>) {
-  const rowId = `${useId()}-g${row.tier}`;
-  const off = paused || !row.affordable;
-  const buy = (mode: BuyMode) => () => enqueue({ type: 'buy', tier: row.tier, mode });
-  return (
-    <tr data-tier={row.tier}>
-      <th scope="row" id={rowId}>
-        {fill(STRINGS['sum.generator'], { k: row.tier })}
-      </th>
-      <td>
-        {fillParts(STRINGS['sum.amount'], {
-          a: (
-            <span data-amount>
-              <Num value={row.amount} />
-            </span>
-          ),
-          b: (
-            <span data-bought>
-              <Num value={row.bought} />
-            </span>
-          ),
-        })}
-      </td>
-      <td data-mult>{fillParts(STRINGS['sum.mult'], { m: <Num value={row.mult} /> })}</td>
-      <td>
-        <BuyButton
-          rowId={rowId}
-          mode={BUY_ONE}
-          label={STRINGS['sum.buy1']}
-          cost={row.cost}
-          disabled={off}
-          onClick={buy(BUY_ONE)}
-        />
-      </td>
-      <td>
-        <BuyButton
-          rowId={rowId}
-          mode={UNTIL_TEN}
-          label={STRINGS['sum.until10']}
-          cost={row.untilTenCost}
-          disabled={off}
-          onClick={buy(UNTIL_TEN)}
-        />
-      </td>
-      <td>
-        <BuyButton
-          rowId={rowId}
-          mode={BUY_MAX}
-          label={STRINGS['sum.max']}
-          disabled={off}
-          onClick={buy(BUY_MAX)}
-        />
-      </td>
-    </tr>
-  );
-}
-
-function GlobalRow({ row, enqueue, paused }: RowProps<GlobalRowView>) {
-  const rowId = `${useId()}-global`;
-  const off = paused || !row.affordable;
-  return (
-    <tr data-global>
-      <th scope="row" id={rowId}>
-        {STRINGS['sum.global']}
-      </th>
-      <td>
-        {fillParts(STRINGS['sum.level'], {
-          l: (
-            <span data-level>
-              <Num value={row.level} />
-            </span>
-          ),
-        })}
-      </td>
-      <td data-mult>{fillParts(STRINGS['sum.mult'], { m: <Num value={row.mult} /> })}</td>
-      <td>
-        <BuyButton
-          rowId={rowId}
-          mode={BUY_ONE}
-          label={STRINGS['sum.buy1']}
-          cost={row.cost}
-          disabled={off}
-          onClick={() => enqueue({ type: 'buyGlobal', mode: 'one' })}
-        />
-      </td>
-      <td />
-      <td>
-        <BuyButton
-          rowId={rowId}
-          mode={BUY_MAX}
-          label={STRINGS['sum.max']}
-          disabled={off}
-          onClick={() => enqueue({ type: 'buyGlobal', mode: 'max' })}
-        />
-      </td>
-    </tr>
-  );
-}
-
 export function SumTab({ view, enqueue, paused = false }: SumTabProps) {
+  const prefix = useId();
+  const panelId = `${prefix}-breakdown`;
+  const [openTier, setOpenTier] = useState<Tier | null>(null);
+  const fade = useFadeOnce();
+  const shownTier = paused ? null : openTier;
+  const open = shownTier === null ? null : view.tiers[shownTier - 1];
+  const triggerId = (tier: Tier): string => `${rowHeaderId(prefix, `g${tier}`)}-mult`;
+  const close = (restoreFocus: boolean): void => {
+    // Back to the trigger (GDD §18: focus is restored); the row stays mounted. A press outside
+    // the panel keeps the focus where the press put it.
+    if (restoreFocus && openTier !== null) document.getElementById(triggerId(openTier))?.focus();
+    setOpenTier(null);
+  };
+  const rows = view.tiers.filter((r) => r.state !== 'hidden');
+  const maxAll = view.maxAll;
   return (
     <div class="sum-tab" data-paused={paused || undefined}>
-      <table>
-        <colgroup>
-          <col class="c-tier" />
-          <col class="c-amount" />
-          <col class="c-mult" />
-          <col class="c-one" />
-          <col class="c-until" />
-          <col class="c-max" />
-        </colgroup>
-        <thead>
-          <tr>
-            <td />
-            <th scope="col">{STRINGS['sum.col.amount']}</th>
-            <th scope="col">{STRINGS['sum.col.mult']}</th>
-            <th scope="col" colSpan={3}>
-              {STRINGS['sum.col.cost']}
-              {SEP}
-              <span data-cite>{fill(STRINGS['sum.cite.lambda'], { a: LAMBDA_ANUMBER })}</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {view.tiers.map((row) => (
-            <TierRow key={row.tier} row={row} enqueue={enqueue} paused={paused} />
-          ))}
-          <GlobalRow row={view.levels} enqueue={enqueue} paused={paused} />
-        </tbody>
-      </table>
-      <p>
-        <button
-          type="button"
-          data-mode={MAX_ALL}
-          disabled={paused || !view.anyAffordable}
-          onClick={() => enqueue({ type: 'maxAll' })}
+      <div class="sum-rows">
+        <table class="sum-table">
+          <colgroup>
+            <col class="c-tier" />
+            <col class="c-amount" />
+            <col class="c-step" />
+            <col class="c-mult" />
+            <col class="c-rate" />
+            <col class="c-one" />
+            <col class="c-until" />
+            <col class="c-max" />
+          </colgroup>
+          <thead>
+            <tr>
+              <td />
+              <th scope="col" class="num-col">
+                {STRINGS['sum.col.amount']}
+              </th>
+              <th scope="col">{STRINGS['sum.col.step']}</th>
+              <th scope="col" class="num-col">
+                {STRINGS['sum.col.mult']}
+              </th>
+              <th scope="col" class="num-col">
+                {STRINGS['sum.col.rate']}
+              </th>
+              <th scope="col" colSpan={3}>
+                {STRINGS['sum.col.cost']}
+                {SEP}
+                <span data-cite>{fill(STRINGS['sum.cite.lambda'], { a: LAMBDA_ANUMBER })}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <TierRow
+                key={row.tier}
+                row={row}
+                idPrefix={prefix}
+                enqueue={enqueue}
+                paused={paused}
+                open={shownTier === row.tier}
+                panelId={panelId}
+                fresh={fade.fresh(`g${row.tier}`)}
+                onFaded={fade.onFaded(`g${row.tier}`)}
+                onBreakdown={() => setOpenTier((t) => (t === row.tier ? null : row.tier))}
+              />
+            ))}
+            {view.levels.state !== 'hidden' && (
+              <GlobalRow
+                row={view.levels}
+                idPrefix={prefix}
+                enqueue={enqueue}
+                paused={paused}
+                fresh={fade.fresh('global')}
+                onFaded={fade.onFaded('global')}
+              />
+            )}
+          </tbody>
+        </table>
+      </div>
+      {maxAll.shown && (
+        <p
+          class="sum-maxall"
+          data-reveal={fade.fresh(MAX_ALL) ? '' : undefined}
+          onAnimationEnd={fade.onFaded(MAX_ALL)}
         >
-          {STRINGS['sum.maxAll']}
-        </button>
-      </p>
-      <p data-tab-x>
-        {STRINGS['sum.x']}
-        {' = '}
-        <Num value={view.x} />
-      </p>
+          <button
+            type="button"
+            class="buy"
+            data-mode={MAX_ALL}
+            data-afford={maxAll.affordable ? 'yes' : 'no'}
+            disabled={paused || !maxAll.enabled}
+            onClick={() => enqueue({ type: 'maxAll' })}
+          >
+            <span class="label">{STRINGS['sum.maxAll']}</span>
+            {SPACE}
+            <Status status={maxAll} />
+          </button>
+        </p>
+      )}
+      {open !== null && open !== undefined && open.state === 'owned' && (
+        <Breakdown
+          key={open.tier}
+          id={panelId}
+          name={fill(STRINGS['sum.generator'], { k: open.tier })}
+          amount={open.amount}
+          factors={open.factors}
+          mult={open.mult}
+          rate={open.production}
+          anchorId={triggerId(open.tier)}
+          onClose={close}
+        />
+      )}
     </div>
   );
 }

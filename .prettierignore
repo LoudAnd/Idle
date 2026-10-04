@@ -7,3 +7,7 @@ package-lock.json
 *.md
 # A planted fixture that is deliberately not valid TypeScript (an unterminated comment).
 tests/arch/fixtures/tokenizer/unterminated.ts
+# Frozen settings fixtures (GDD §21.1): byte-for-byte as written, never reformatted.
+tests/fixtures/settings
+# A planted fixture that is deliberately not valid TSX (the string lint fails closed on it).
+tests/arch/fixtures/strings/parse-error.tsx

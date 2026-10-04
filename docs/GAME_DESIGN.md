@@ -89,7 +89,10 @@ from open sources."
     the"). `src/engine/format.ts` takes these tables as a parameter and holds no player-visible
     text of its own.
 - `src/ui/legal.ts`: attribution, licence, change and non-affiliation notices. Each entry is at
-  most 200 characters and has one of 4 declared kinds.
+  most 200 characters and has one of 4 declared kinds. Its text is either quoted verbatim from a
+  licence file in `public/LICENSES/` (its `source`; every licence notice is one), or exactly a
+  notice line §16 fixes in double quotes, `{placeholders}` included (the OEIS card and
+  non-affiliation lines of §16.1, the icon credit line of §16.2), which no licence file holds.
 - `public/assets/data/oeis.json`: quoted OEIS fields.
 - Generated manifests: icon artists, sound pack names, track titles.
 - Content tables in `src/engine/content/*.ts` hold ids only. A `label:` field there may only
@@ -108,14 +111,14 @@ says where: `check` is `npm run check` (local and CI, no source clones), `pipeli
 
 | Test                               | Runs     | Guards                                                                                                        |
 | ---------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
-| `tests/arch/strings.test.ts`       | check    | `strings.ts` entries ≤ 32 chars and no sentence (`/[a-z]{3,}\s[a-z]{3,}.*[.!?](\s\|$)/i`; the trailing `(\s\|$)` lets decimals such as `0.03c` through, and a planted fixture proves it). In `src/ui/**/*.tsx` outside `strings.ts`/`legal.ts`: no JSX text literal with ≥ 2 letters, and no string-literal JSX attribute with ≥ 2 letters (`aria-label`, `title`, `placeholder`, `alt`, `label`). In `src/engine/content/**`: every `label:` is a `strings.ts` key. `format.ts` contains no letter-only string literals of 2+ letters except via its table parameter |
-| `tests/arch/templates.test.ts`     | check    | Every content id that has a `templateId` (upgrades, milestones, challenge rules, rewards, achievements; §21.3) has exactly the Appendix C template in `strings.ts`, and every Appendix C row has a content id. Effects without one (the Sum base factors) are checked by the string lint's `label:` rule |
-| `tests/arch/glyphs.test.ts`        | check    | Every code point in `strings.ts` is in the shipped font subsets (§16.5) or in the fallback allowlist           |
+| `tests/arch/strings.test.ts`       | check    | `strings.ts` entries ≤ 32 code points and no sentence (`/[a-z]{3,}\s[a-z]{3,}.*[.!?](\s\|$)/i`; the trailing `(\s\|$)` lets decimals such as `0.03c` through, and a planted fixture proves it). In every `src/**/*.tsx` outside `strings.ts`/`legal.ts` (parsed with Vite's `parseAst`; a file that does not parse is a violation): no JSX text with ≥ 2 letters, no string literal or static template with ≥ 2 letters as a JSX child expression (also in the branches of `?:`, `&&`, `\|\|`), and none in any attribute or prop of any element, DOM or component, except the short non-text list (`id`, `class`, `key`, `type`, `role`, `scope`, `for`, `mode`, `idPrefix`, `orientation`, `setting`, `data-*`, `aria-labelledby`, `aria-controls`, `aria-describedby`, `aria-hidden`); so every text attribute (`aria-label`, `aria-description`, `aria-roledescription`, `aria-valuetext`, `aria-placeholder`, `title`, `placeholder`, `alt`, `label`) and every component prop (`name`, `description`, …) is covered, also inside object and array literals in an attribute and in spread objects (literal, through a variable, or returned by a function in the same file; a spread the lint cannot resolve fails). In `src/ui/**` and `src/main.tsx` outside `strings.ts`/`legal.ts`: no literal with two words (`/\p{L}{2,}\s+\p{L}{2,}/u`), except class values and diagnostics (`console.*`, `new …Error`, `problems`), so prose cannot hide in a constant rendered as `{NAME}`. In `src/engine/content/**`: every `label:` is a string literal that is a `strings.ts` key (shorthand, identifiers and templates fail). `format.ts` has no string literal with ≥ 2 letters and no single letter other than `e`. `fill`/`fillParts` never take a literal template. `legal.ts` entries are ≤ 200 characters, of a declared kind, and either quoted verbatim from a licence file under `public/LICENSES/` (their `source`; required for licence notices) or exactly a quoted notice line of §16 |
+| `tests/arch/templates.test.ts`     | check    | Every content id that has a `templateId` (upgrades, milestones, challenge rules, rewards, achievements; §21.3) has exactly the Appendix C template in `strings.ts`; every `strings.ts` key that is an Appendix C id holds exactly its template, and no key in an Appendix C namespace (`product.`, `power.`, …) is missing from the appendix. The reverse direction (every row has its entry) applies per shipped section, from M5's Product on; UI templates such as `slot.term` need no content id. Effects without a `templateId` (the Sum base factors) are checked by the string lint's `label:` rule |
+| `tests/arch/glyphs.test.ts`        | check    | Every code point in `strings.ts` (and in `legal.ts`, the string literals of `format.ts` and `src/ui/**`, the JSX text of every `src/**/*.tsx`, and every Appendix C template) is in the shipped font subsets (§16.5) or in the fallback allowlist. "In the subsets" means a real glyph: in a subset's `unicode-range` and in that woff2 file's `cmap`, at both shipped weights |
 | `tests/arch/audio.test.ts`         | check    | No `createOscillator`, `createBuffer`, `new AudioBuffer`, `getChannelData` (banned outright, not only its writes) or `copyToChannel` in `src/`, nor the other synthesis APIs (`createPeriodicWave`, `createConstantSource`, `createScriptProcessor`, `audioWorklet`, `AudioWorkletNode`, `OscillatorNode`, `OfflineAudioContext`); strings are scanned too, so `ctx['createOscillator']` is caught. Also no WAV built in JavaScript and played through allowed playback (the jsfxr/riffwave route): no `data:audio` URI, no `'RIFF'`/`'WAVE'`/`'fmt '` header literal or constant, no audio MIME literal outside `canPlayType`, and no typed arrays, ArrayBuffers, DataViews or object URLs in a file that plays audio. `public/` holds no scripts and `index.html` no inline script, so every shipped script is under `src/` |
 | `tests/arch/engine-purity.test.ts` | check    | `src/engine` and `src/sim` use no `window`, `document`, `Date`, `performance`, `Math.random` or UI/platform imports, nor the other environment globals (`globalThis`, `self`, `navigator`, `location`, storage including `indexedDB`, timers including `queueMicrotask`/`setImmediate`, `requestAnimationFrame`, `fetch`, workers and channels, `process`, `Buffer`, `crypto`, `Intl`, `eval`, `toLocale*String`), no `Math` other than as `Math.<name>` (so `Math['random']` and destructuring are caught), no `import.meta` and no `Function` constructor; relative imports stay in `src/engine` (`src/sim` may also import `src/engine`) and end in `.ts`; the only bare import is `break_eternity.js`, from `num.ts`. `npm run typecheck` also checks `src/engine` and `src/sim` with `tsconfig.engine.json` (lib ES2023, no DOM or Node types), so a missed global is a compile error |
 | `tests/arch/num.test.ts`           | check    | Only `src/engine/num.ts` imports `break_eternity.js` (static, type-only, dynamic or `require`, including subpaths); no raw log method on a `Num` outside `num.ts` (`.log10()`, `.log2()`, `.ln()`, `.log(b)`, `.absLog10()`, `.pLog10()`, `.logarithm(b)`, also via `?.` or a bracketed name; `Math` logs of doubles are allowed); nothing in `src/` calls the bench-only `installOpCounter` |
 | `tests/arch/test-hooks.test.ts`    | check    | Nothing in `src/` except `src/engine/effects.ts` references the test-only effect hook `installTestEffect` (§21.8), so production code cannot inject an effect and the bundle tree-shakes it |
-| `tests/arch/licenses.test.ts`      | check    | Every runtime dependency is MIT and its `LICENSE` ships verbatim as `public/LICENSES/MIT-<name>.txt` (Preact and break_eternity.js from M1) |
+| `tests/arch/licenses.test.ts`      | check    | Every runtime dependency is MIT, with its `LICENSE` verbatim as `public/LICENSES/MIT-<name>.txt` (Preact and break_eternity.js from M1), or a font under OFL-1.1, with its `LICENSE` verbatim as `public/LICENSES/OFL-1.1.txt` (JetBrains Mono from M3); any other licence fails |
 | `tests/arch/node-import.test.ts`   | check    | A plain `node` imports `src/engine/format.ts` through type stripping and prints a formatted value (§21.6) |
 | `tests/assets/manifest.test.ts`    | check    | Every file in `public/assets/**` and `src/data/generated/**` has a manifest record (source repo, commit, path, source sha256, output sha256, SPDX licence, author, transforms, `verified: true`), and every output's sha256 matches its record |
 | `tests/assets/oeis.test.ts`        | check    | Committed `oeis.json`: filters (none contains `(AT)`, `@`, `http`, `www.` or ` writes:`), term counts, window rules, record costs, header |
@@ -338,8 +341,9 @@ cover the digits, `×`, `·`, `−`, `↑`, `↓` and Σ Δ Π ε β λ ρ δ μ
 
 **Stability:**
 - Number columns are right-aligned with a minimum width.
-- The headline number updates at most 10 times per second.
-- Rates use a 1 s moving average.
+- The headline number updates at most 10 times per second (of game time).
+- Rates are exact and instantaneous (A_k · m_k): the integrator is exact, so they do not
+  flicker, and they equal the breakdown's product (§17.4) exactly.
 
 ---
 
@@ -1505,7 +1509,8 @@ pinned commit and records the source sha256 and `verified: true` per entry in
 
 **On screen:**
 - Every OEIS string appears with its A-number.
-- Every card has the line "Data: OEIS Annnnnn · © OEIS Foundation Inc. · CC BY-SA 4.0".
+- Every card has the line "Data: OEIS {a} · © OEIS Foundation Inc. · CC BY-SA 4.0", with
+  its A-number as `{a}` (a `legal.ts` notice with no licence file, §2).
 - The Credits tab lists every entry with author and revision, plus "Not affiliated with or
   endorsed by the OEIS Foundation." It reads these fields from `oeis.json` at runtime.
   `src/data/generated/credits.json` (bundled into the MIT JavaScript) covers icons, sounds,
@@ -1685,8 +1690,9 @@ other artists, some tagged with a different licence (for example "Parhelion", al
 
 ### 16.5 Fonts and libraries
 
-- **Fonts:** `@fontsource/jetbrains-mono` 5.3.0 (OFL-1.1), pinned exactly. The full OFL text
-  ships in `public/LICENSES/OFL-1.1.txt`.
+- **Fonts:** `@fontsource/jetbrains-mono` 5.3.0 (OFL-1.1), pinned exactly, a runtime
+  dependency. The full OFL text (the package's `LICENSE`, verbatim) ships in
+  `public/LICENSES/OFL-1.1.txt` from M3, the first build that bundles the font.
   - **Files:** only the woff2 files for Latin 400, Latin 500, Greek 400 and Greek 500 ship
     (21.2, 21.8, 4.2 and 4.3 KB; about 52 KB in total).
   - **CSS:** `src/ui/fonts.css` declares these four `@font-face` rules itself, each with the
@@ -1710,19 +1716,33 @@ other artists, some tagged with a different licence (for example "Parhelion", al
 ### 17.1 Header (always visible)
 
 - x, large
-- the rate `+X/s` and the growth `×10^Y /min` (trailing 60 s change in log10 x). Samples with
-  x ≤ 0 are skipped (`log10Pos` returns `null`); with fewer than 2 positive samples the readout
-  shows `—`.
+- the rate `+X/s` (A_1 · m_1, exact) and the growth `×10^Y /min` (trailing 60 s change in
+  log10 x). Samples with x ≤ 0 are skipped (`log10Pos` returns `null`); with fewer than 2
+  positive samples the readout shows `—`.
+  - Samples are taken at most once per whole second of game time. Y = log10 x(newest) −
+    log10 x(oldest sample within 60 s of it); a window shorter than 60 s is not extrapolated, and
+    Y is negative after a purchase that spends most of x.
 - layer currencies (P, E, TP) once unlocked
 - the **Next goal** chip, a template with a log-scale bar such as "Reach 2^128 · 43%". The
-  percentage is (log10Floor1(x) − log10 start) / (log10 goal − log10 start), clamped to 0–100%,
-  so x = 0 shows 0%.
-- save status, mute and Settings
+  percentage is (log10Floor1(x) − log10 start) / (log10 goal − log10 start), floored and clamped
+  to 0–100%, so x = 0 shows 0% and x ≥ goal exactly 100%.
+  - The goals, in order: the first purchase of G2…G8 ("Buy G2"), then x ≥ 2^128, 2^1024 and
+    2^65536 ("Reach 2^128"). The chip shows the first goal not yet done (the nearest unlock);
+    start is the previous goal's threshold, or x = 10 for the first.
+  - A goal is done once it has been met: a tier goal once that tier has been owned, an x goal
+    once x has reached it. Done goals are remembered like reveals (§17.4), so the chip flips
+    back neither after Max all spends x nor after a reset (M5) sets the bought counts to 0.
+    Goals are classified by kind (a first purchase or an x threshold), not by their template.
+    With every goal done the chip is not shown.
+- save status, mute and the Settings button, which opens the Settings panel in the main area
+  (from M3)
 
 ### 17.2 Tabs
 
 Each tab has an icon and a label. It appears when its condition is first met (the half-cost
-rule) and shows a dot badge until visited.
+rule) and shows a dot badge until visited. The tab list is not rendered while only one tab is
+revealed (M3 has only Sum), so a new game shows no tab list; Settings is reached through the
+header's button.
 
 | Tab          | Icon                       | Appears                                         |
 | ------------ | -------------------------- | ----------------------------------------------- |
@@ -1746,11 +1766,31 @@ rule) and shows a dot badge until visited.
 [icon] Generator 3 | 145 (140 bought) | step 14 · 0/10 | ×6.4e4 | +1.2e4/s | [Buy 1 · 1e9] [Until 10 · 3.2e13] [Max] ≈ 8s | hold [   ]
 ```
 
-- The step progress is a log-scale bar. The data horizon is shown as "term 14 of 34".
+- The step progress is a log-scale bar: `step i · j/10` with j = b mod 10 purchases into the
+  step, drawn as 10 segments. Costs are geometric, so the bar is linear in log10 of the cost.
+  The data horizon is shown as "term 14 of 34" (the Appendix C template `slot.term`).
+- Production is A_k · m_k, exact (§4.2); for G1 it is the rate of x.
 - **Silhouette:** a tier row is shown dimmed from the moment it is revealed (its resource
   reaches half its cost, §17.4) until its first purchase. Its Buy button shows its cost; it has
   no other label. Before the reveal the row is absent. So a new game shows no G2 row, and the G2
-  silhouette appears at x = 50 with "Buy 1 · 100".
+  silhouette appears at x = 50 with "Buy 1 · 100". The row header stays in the DOM, visually
+  hidden, so the button's accessible name still starts with "Generator 2". Dimming never takes
+  enabled text below 4.5:1: a unit test blends the silhouette's opacity (read from `SumTab.css`)
+  into its text colour over the page background, in every theme. Generator 1 is always a full
+  row.
+- **The global row** follows the same rule with its first level (cost 100, revealed at x = 50,
+  a full row from L = 1). Its silhouette keeps its "Global" header visible, since two unlabelled
+  "Buy 1 · 100" buttons could not be told apart. **Max all** appears with the first of them.
+- **Buttons** each show their status (§17.4, §18): ✓ (read as "affordable") with a solid border
+  when x covers the full price, otherwise `≈ t` with a dashed border (`—`, read as "never", when
+  the price is never reached). A button is enabled whenever it buys at least one, so Until 10
+  can be enabled while its full set is not covered. **Max all** shows ✓ when it buys at least
+  one, otherwise the `≈ t` of the cheapest next purchase of a shown row, and fades in like the
+  rows.
+- **Layout:** a table with fixed column widths while the rows' container is at least 70rem wide
+  (a container query, so a later tab rail narrows it too), sized for the widest allowed format
+  (precision 4, integer threshold 1e9); 2-line cards otherwise (§17.6), with Buy 1, Until 10 and
+  Max in the same columns in every row, the global row included.
 
 ### 17.4 Onboarding without text
 
@@ -1758,8 +1798,20 @@ rule) and shows a dot badge until visited.
 - **Reveal at half price (one rule):** a hidden element fades in when its resource first
   reaches half its cost or threshold, value ≥ threshold/2. For 2^n thresholds that is 2^(n−1):
   Product at 2^127, Power at 2^1023, Tower at 2^65535. Every reveal has a unit test.
+  - Reveals are remembered: an element stays once revealed (a purchase that spends x below half
+    does not hide it), and an owned item counts as revealed (owning a tier also reveals the
+    tiers below it, whose costs x passed on the way).
+  - The memory (reveals, goals done, visited tabs) is one value in the UI from M3
+    (`src/ui/onboarding.ts`, kept by the shell's deriver, which can read and reset it). It sees
+    the state at every tick boundary, before that tick's purchases, not only the states the view
+    is derived from at the UI fps, so a threshold crossed just before a queued purchase spends x
+    is still recorded. M4 persists it in the save as validated ids (`memoryToIds` /
+    `memoryFromIds`) and resets it when a game replaces the current one in-page.
+  - The fade is 150 ms, so reduced motion keeps it (§17.7). It plays once per element: showing
+    a tab again (after Settings) does not fade its rows a second time.
 - **One highlight at a time:** a pulsing outline marks the cheapest useful action. It stops
-  after that action has been done 3 times.
+  after that action has been done 3 times. (M16, with its setting; M3 ships reveal, Next goal,
+  breakdown and time-to-afford.)
 - **Breakdown tooltips** list every factor of a rate, for example:
   ```
   Generator 1 production
@@ -1771,7 +1823,25 @@ rule) and shows a dot badge until visited.
     = 9.2e3 /s
   ```
   The displayed product equals the displayed rate to 1e-9 in log space (unit test).
-- **Time-to-afford** on every button: `≈ 12s` or "now".
+  - The rows are the effects table's factors in fold order, each label a `strings.ts` template
+    filled from the factor's `params` (§21.3), then `= ×m` and `= {r} /s`. A disclosure: from
+    641 px a popover anchored just below its trigger, the row's `×m` button, with its right
+    edge on the trigger's (so in the table layout it covers no buy button); a bottom sheet up
+    to 640 px. Escape or Close returns the focus to the trigger. A pointer press outside the
+    panel and its trigger closes it too (light dismiss) and leaves the focus where the press
+    put it; presses in the header do not count, since its Settings button opens Settings over
+    the breakdown, which is still open when Settings closes (§18: Escape closes the top panel
+    only).
+- **Time-to-afford** on every button: `✓` or `≈ 12s`.
+  - Solved exactly: before the next event x(t) = Σ_j c_j t^j with c_0 = x and
+    c_j = A_j · m_1⋯m_j / j! (§5.5), bisected in log space.
+  - Buy 1 and Max use the next purchase's cost, Until 10 the full set's, the global row its
+    level's. `—` when the cost is never reached (no production, above 2^1024 before the lift,
+    or beyond 1e300 s).
+  - Shown as ✓ when affordable; otherwise `≈ 12s` (whole seconds rounded up), `≈ 3.40m`,
+    `≈ 2.10h` or `≈ 1,234d`, through the player's number format. The unit is chosen after
+    rounding: a value that would show as 60 of its unit (or 24 hours) moves to the next one, so
+    59.2 s is `≈ 1m`, 3,599 s `≈ 1.00h` and 86,399 s `≈ 1.00d`.
 
 ### 17.5 Notifications
 
@@ -1789,6 +1859,9 @@ rule) and shows a dot badge until visited.
 - left tab rail
 - main panel
 - an optional pinned Details panel for the selected card or upgrade
+- the header on one line; below 1024 px on two (x and Settings, then the rates and the goal)
+- the Sum rows as a table while their container is at least 70rem wide, cards otherwise
+  (§17.3)
 
 **Mobile (≤ 640 px):**
 - sticky compact header and a bottom tab bar (5 tabs plus More)
@@ -1818,7 +1891,13 @@ rule) and shows a dot badge until visited.
 - **Keyboard:**
   - every control is a native `<button>` or `<input>`
   - tabs follow the WAI-ARIA tablist pattern
-  - focus is always visible; modals trap focus and restore it
+  - focus is always visible; modals trap focus and restore it. The sticky header's height is
+    reserved as `scroll-padding-top` (kept current from the header's size), so a control that
+    takes the focus (Tab, Shift+Tab, or `focus()`, as the recovery panel's Reload does) is
+    never scrolled under the header; up to 640 px `scroll-padding-bottom` keeps it clear of the
+    floating Max all
+  - headings: one `h1` (the game's title, visually hidden), then an `h2` per panel (the Sum
+    tab's is visually hidden and names its panel while there is no tab list)
 - **Hotkeys** (`src/ui/hotkeys.ts`). They match on `event.code`, so they do not depend on the
   keyboard layout or on what Shift does to `event.key`:
 
@@ -1837,12 +1916,19 @@ rule) and shows a dot badge until visited.
   - Ignored when the event target is an `input`, `textarea` or `select`, or is inside a
     `contenteditable` element, so typing "12" into a hold-cap field buys nothing.
   - Ignored when Ctrl, Meta or Alt is held, so browser shortcuts such as Ctrl/Cmd+1 still work.
-  - Ignored on `event.repeat` for reset keys.
+  - Ignored on `event.repeat` for reset keys; buy keys may repeat.
+  - Ignored during IME composition (`event.isComposing`).
+  - `KeyM` and `KeyG` ignore Shift. `Escape` is handled by the open panels themselves
+    (Breakdown, Settings, and later every modal and confirmation), through one stack of dismiss
+    layers (`src/ui/dismiss.ts`): only the topmost open panel handles Escape (and an outside
+    press), so one Escape closes one panel. M3 ships the buy keys, `KeyM` and `KeyG`; later
+    milestones add the rest.
   - jsdom tests cover each case: input focus, contenteditable, each modifier, Shift+digit on a
     non-US layout (`event.key` = "!" or "&"), and `?`.
 
 - **Screen readers:**
-  - numbers have spoken labels
+  - numbers have spoken labels; the growth readout is read "times ten to the Y per minute",
+    and a `—` status "never"
   - live values are not announced continuously
   - buttons have full names, e.g. "Buy Generator 3, costs 1.00 times ten to the 9, affordable"
 - **Motion:** Full, Reduced or Off. The default follows `prefers-reduced-motion`.
@@ -1880,9 +1966,19 @@ rule) and shows a dot badge until visited.
   samples and `meta`, and keeps settings. A later failed load therefore cannot bring back
   pre-reset progress from the backup. A test asserts exactly these keys are removed.
 
+**Settings v1 (M3):** notation, precision (0–4), integer threshold (1e3, 1e6, 1e9), theme (dark,
+light; high-contrast in M16) and UI fps (10–60; the panel offers 15, 30 and 60). They are the
+only thing stored before M4: `src/platform/settingsStore.ts` wraps every storage call, keeps the
+blob in memory when storage throws, and M4's `storage.ts` takes the key over. The settings are
+read and validated once, at start (`main.tsx`, which also applies the theme and UI fps before the
+first frame), and written only when the player changes one. A change applies at once and is
+saved.
+
 **Settings storage.** `isi.settings` holds `{ "settingsVersion": n, "values": { … } }`.
 - Each field is validated on load: a missing or invalid field gets its default; unknown keys
-  are dropped.
+  are dropped. A payload that is not an object, or whose `settingsVersion` is not a positive
+  integer, gives the defaults; a newer version keeps its valid known fields and is not written
+  back until the player changes a setting.
 - Settings migrations work like save migrations, with one frozen fixture per settings version
   in `tests/fixtures/settings/`. Milestones that add settings (M3, M5, M10, M12b, M16, M20) add
   a settings version and its fixture.
@@ -2038,14 +2134,15 @@ summary (before and after values).
 
 ```
 src/engine/            pure TypeScript: no DOM, no clock, no Math.random; erasable syntax only; relative imports end in .ts
-  num.ts format.ts state.ts actions.ts tick.ts integrate.ts effects.ts offline.ts transforms.ts invariants.ts
-  content/             data tables with stable string ids: sum, product, power, challenges, tower, records, achievements, knobs
+  num.ts format.ts state.ts actions.ts tick.ts integrate.ts effects.ts forecast.ts offline.ts transforms.ts invariants.ts
+  content/             data tables with stable string ids: sum, layers (unlock thresholds), product, power, challenges, tower, records, achievements, knobs
   systems/             sum product discovery collection slots lab power exponent challenges tower records autobuyers achievements stats
   data/                oeis.ts (typed loader), windows.ts (window index + projection maps), log2dec.ts
   save/                codec envelope migrations validate
 src/sim/               bot strategies, fixpoint calculator, pacing metrics (pure; Node-runnable)
-src/platform/          storage, tablock, loop (rAF), clock, audio (sample playback), music, visibility, data (fetch oeis.json), errors, devhooks
-src/ui/                Preact components; strings.ts; legal.ts; fonts.css; theme tokens; reveal.ts; goals.ts; hotkeys.ts; Recovery.tsx
+src/platform/          storage, settingsStore (M3; M4's storage absorbs it), tablock, loop (rAF), clock, audio (sample playback), music, visibility, data (fetch oeis.json), errors, devhooks
+src/ui/                Preact components; strings.ts; legal.ts; fonts.css; theme tokens; reveal.ts; goals.ts; onboarding.ts (the memory); growth.ts; duration.ts; dismiss.ts (Escape layers); hotkeys.ts; Breakdown.tsx; Recovery.tsx
+  shell/ settings/ sum/  the header, tabs and layout; the Settings panel and settings v1; the Sum tab
 src/data/generated/    icon manifest, sfx manifest, data-manifest.json, credits.json (icons, sfx, music, fonts, libraries only; MIT/CC0; never OEIS fields)
 public/assets/         icons/sprite.svg, sfx/*.wav, music/*.mp3, data/oeis.json + LICENSE-OEIS.txt
 public/LICENSES/       CC-BY-SA-4.0.txt, CC-BY-3.0.txt, OFL-1.1.txt, MIT notices (Preact, break_eternity.js, open-game-sfx-index)
@@ -2124,6 +2221,8 @@ fixtures, M6a for the manifest, M6b for the height report), so
     is exact in M2, which has no state-dependent effects.
   - The view is derived from the state inside the safe wrapper (§21.8) at most at the UI fps
     (30 by default; the setting comes with M3), and the loop keeps the last good view.
+  - The UI's `observe(state)` (also in the safe wrapper) sees the state at every tick boundary,
+    before the tick applies its actions; the onboarding memory (§17.4) is kept from it.
 - **Hidden tabs** catch up through the same path when shown again.
 - **Errors:** every call into the engine goes through `safeTick` (§21.8).
 - **Rendering:** Preact re-renders at most at the UI fps setting, from a version counter.
@@ -2646,6 +2745,87 @@ count comes from the knob and is shown with `power.ms.count`.
 ---
 
 ## 25. Changelog
+
+**v1.4 (M3):** clarifications found while building the shell and the onboarding framework. No
+formula, frozen constant or stored game format changed (there is still no save format), so no
+migration is needed. Settings v1 is the first settings version (frozen fixture
+`tests/fixtures/settings/v1.json`).
+- **Settings persisted before saves (§19):** settings v1 (notation, precision, integer threshold,
+  theme, UI fps) are stored in `isi.settings` from M3, with per-field validation, a memory
+  fallback when storage throws and no banner yet; game state stays M4, whose `storage.ts` takes
+  the key over. The UI fps setting (§21.4) and the integer threshold (§19 Numbers) are in v1
+  with the three settings the roadmap names; theme is dark or light (high-contrast in M16).
+- **Settings is a header button (§17.1, §17.2):** it opens the Settings panel (sub-tabs
+  Numbers and Display) in the main area, over the hidden tab; the tab list is not rendered while
+  only one tab is revealed.
+- **Exact rates (§4.2):** rates are A_k · m_k, exact and instantaneous, instead of a 1 s moving
+  average, so the breakdown's `= {r} /s` equals the displayed rate exactly; the headline x
+  updates at most 10 times per second of game time.
+- **Next goal (§17.1):** the goal list (G2…G8, then 2^128, 2^1024, 2^65536), start = the
+  previous goal's threshold (x = 10 for the first), reached x goals remembered, x ≥ goal shows
+  exactly 100%.
+- **Growth readout (§17.1):** at most one sample per whole second of game time; Y is the literal
+  trailing-60 s change, not extrapolated for a shorter window.
+- **Reveals (§17.3, §17.4):** reveals, reached goals and visited tabs are remembered in the UI
+  (M4 persists them); an owned tier also reveals the tiers below it; the global row and Max all
+  reveal by the same half rule (first level 100, so at x = 50); a tier silhouette's header stays
+  in the DOM, visually hidden, for its accessible name, while the global silhouette keeps its
+  "Global" header visible; Generator 1 is always a full row.
+- **Step bar and horizon (§17.3):** fill = (b mod 10)/10, linear in log10 of the cost; the
+  horizon reads with the Appendix C template `slot.term`.
+- **Time-to-afford (§17.4):** solved exactly on the polynomial x(t) of §5.5; every button shows
+  ✓ or `≈ t` (Buy 1 and Max the next purchase, Until 10 the full set), `—` when never reached;
+  a button is enabled whenever it buys at least one.
+- **One highlight at a time (§17.4):** deferred to M16, which owns its setting.
+- **Hotkeys (§18):** `KeyM` and `KeyG` ignore Shift; `event.isComposing` is ignored; buy keys
+  may repeat; Escape is handled by the open panel.
+- **String lint (§2):** the JSX rules cover every `src/**/*.tsx` (so `main.tsx` too), literals
+  in JSX child expressions and their `?:`/`&&`/`||` branches, and the other ARIA text
+  attributes; `format.ts` may hold the single letter `e` only; `fill`/`fillParts` never take a
+  literal template; files are parsed with Vite's `parseAst` (TypeScript 7 has no JavaScript
+  compiler API) and a parse error fails the lint.
+- **Templates test (§2):** content `templateId`s and `strings.ts` keys that are Appendix C ids
+  must hold their exact template, and keys in Appendix C namespaces must be listed; the reverse
+  direction (every row has an entry) applies per shipped section from M5. The range row
+  `power.slots12` … `power.slots78` stands for slots12, slots34, slots56 and slots78.
+- **Glyph test (§2, §16.5):** "in the shipped subsets" is a real glyph (unicode-range ∩ the woff2
+  cmap, at both weights), since the ranges declare 100 Latin and 58 Greek code points without a
+  glyph; it also scans `legal.ts`, the string literals of `format.ts` and `src/ui/**`, and every
+  Appendix C template.
+- **Licences (§2, §16.5):** the font is a runtime dependency under OFL-1.1; the licence test
+  allows OFL-1.1 for fonts, checked against `public/LICENSES/OFL-1.1.txt`, which ships from M3
+  (not M8).
+- **M3 review fixes:**
+  - **String lint (§2):** the JSX rule covers every attribute and prop of every element except a
+    short non-text list (so component props such as `name` and `description` are covered), the
+    contents of object and array literals in attributes, and spread objects (an unresolvable
+    spread fails); a new `ui-words` rule bans two-word literals anywhere in `src/ui/**` and
+    `main.tsx` outside `strings.ts`/`legal.ts`, except classes and diagnostics. Planted fixtures
+    cover one literal per named text attribute, the `&&`/`||` branches, static templates and
+    the review's bypass routes.
+  - **Glyph test (§2):** it also reads the JSX text of every `src/**/*.tsx`, which is not a
+    string literal (a planted `<span>★</span>` fails).
+  - **legal.ts (§2):** a notice is either quoted verbatim from a licence file under
+    `public/LICENSES/` (licence notices always are) or exactly a notice line §16 fixes in double
+    quotes, so the OEIS and icon credit lines of M6b and M8 have a rule; §16.1's card line now
+    reads "Data: OEIS {a} · …" with its placeholder.
+  - **Onboarding memory (§17.1, §17.4, §21.4):** reveals, goals done and visited tabs are one
+    value (`onboarding.ts`) that the deriver can read and reset; the loop shows it every tick
+    boundary's state before the tick's purchases, so a reveal crossed between two derives is
+    never missed. Goals have a kind; a tier goal stays done after a reset. The layer thresholds
+    come from one engine table (`content/layers.ts`) that the reveals and goals share.
+  - **Escape and dismissal (§17.4, §18):** one stack of dismiss layers, so Escape in Settings no
+    longer also closes a breakdown left open under it; the breakdown is anchored under its
+    trigger and closes on a press outside it (except in the header).
+  - **Time-to-afford (§17.4):** "now" is gone (an affordable button shows ✓); the unit is chosen
+    after rounding (no `≈ 60.0m` or `≈ 24.0h`); Max all shows its status and fades in.
+  - **Layout and accessibility (§17.3, §17.6, §18):** the sticky header's height is reserved as
+    scroll padding, so focus is never hidden under it; the Sum table is used from a 70rem
+    container (cards below, Buy 1/Until 10/Max aligned, the breakdown's table no longer styled
+    as a card); the Settings panel keeps its 32rem; rows fade in once; a visually hidden `h1`
+    and the Sum panel's `h2`; spoken forms for the growth readout and the `—` status; the
+    silhouette's dimmed text is checked at its opacity.
+  - **Settings (§19):** loaded once at start and passed to the App.
 
 **v1.3 (M2):** clarifications found while implementing the Sum layer, the loop and the bot. No
 formula, frozen constant or stored format changed (there is no save format yet), so no

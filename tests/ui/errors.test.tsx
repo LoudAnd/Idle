@@ -8,12 +8,9 @@ import { installTestEffect } from '../../src/engine/effects.ts';
 import type { EffectDef } from '../../src/engine/effects.ts';
 import { makeState, serializeState } from '../../src/engine/state.ts';
 import { createErrorHub, installGlobalHandlers } from '../../src/platform/errors.ts';
-import { createGameLoop } from '../../src/platform/loop.ts';
-import { App } from '../../src/ui/App.tsx';
 import { TabBoundary } from '../../src/ui/Recovery.tsx';
 import { STRINGS } from '../../src/ui/strings.ts';
-import { buildSumView, checkSumView } from '../../src/ui/sum/view.ts';
-import { createFakeClock } from './support/fakeClock.ts';
+import { setupApp } from './support/app.tsx';
 
 // The Sum tab, wrapped so a test can make its render throw.
 const tabFault = vi.hoisted(() => ({ on: false }));
@@ -38,22 +35,13 @@ afterEach(() => {
 });
 
 function setup() {
-  const clock = createFakeClock();
   const hub = createErrorHub();
   cleanups.push(installGlobalHandlers(window, hub));
-  const loop = createGameLoop({
-    clock,
-    hub,
-    derive: buildSumView,
-    checkView: checkSumView,
-    initial: makeState({ x: 1000, amounts: [5, 1], bought: [5, 1] }),
-  });
-  const onReload = vi.fn();
-  const r = render(<App loop={loop} onReload={onReload} />);
-  act(() => loop.start());
-  const advance = (ms: number) => act(() => clock.advance(ms));
-  advance(500);
-  return { ...r, clock, hub, loop, advance, onReload };
+  // x = 1e30 reveals every row, so the paused screen has every kind of control; A1 = 1e30
+  // keeps x growing visibly (2e30/s).
+  const ctx = setupApp(makeState({ x: '1e30', amounts: ['1e30', 1], bought: [5, 1] }), { hub });
+  ctx.advance(500);
+  return { ...ctx, hub };
 }
 
 function effect(id: string, value: EffectDef['value'], cls: EffectDef['class']): EffectDef {
@@ -82,9 +70,13 @@ function expectPausedWithPanel(ctx: ReturnType<typeof setup>): void {
   // The paused screen offers nothing else to act on: the focus is on Reload and every buy
   // control of the frozen tab is disabled.
   expect(document.activeElement).toBe(reload);
+  // Every control of the frozen tab: 2 owned rows (Buy 1, Until 10, Max and the ×m trigger),
+  // 6 silhouettes (Buy 1), the global silhouette (Buy 1) and Max all.
   const controls = [...ctx.container.querySelectorAll<HTMLButtonElement>('[data-tab] button')];
-  expect(controls.length).toBeGreaterThanOrEqual(25); // 8 × 3 + 2 + Max all
+  expect(controls.length).toBe(2 * 4 + 6 + 1 + 1);
   for (const c of controls) expect(c.disabled, c.getAttribute('data-mode') ?? '').toBe(true);
+  // ... and the header's Settings button.
+  expect(ctx.container.querySelector<HTMLButtonElement>('[data-settings]')?.disabled).toBe(true);
   expect(ctx.container.querySelector('[data-paused]')).not.toBeNull();
   fireEvent.click(reload);
   expect(ctx.onReload).toHaveBeenCalledTimes(1);
@@ -120,6 +112,19 @@ describe('recovery (GDD §21.8)', () => {
     expectPausedWithPanel(ctx);
     // The last good view is still shown: x is a number.
     expect(ctx.container.querySelector('[data-x]')?.textContent).toMatch(/\d/);
+  });
+
+  it('an open breakdown closes on a fault, so Reload is the only thing left to act on', () => {
+    const ctx = setup();
+    fireEvent.click(ctx.container.querySelector('tr[data-tier="1"] button[data-breakdown]')!);
+    expect(ctx.container.querySelector('[data-breakdown-panel]')).not.toBeNull();
+    act(() => {
+      window.dispatchEvent(new ErrorEvent('error', { error: new Error('x'), message: 'x' }));
+    });
+    expect(ctx.container.querySelector('[data-breakdown-panel]')).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: STRINGS['recovery.reload'] }),
+    );
   });
 
   it('an error event on window pauses and opens the panel', () => {

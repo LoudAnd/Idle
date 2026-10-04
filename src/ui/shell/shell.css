@@ -1,0 +1,214 @@
+/*
+ * The shell layout (GDD §17.1, §17.6): one DOM structure, placed by CSS.
+ * - ≥ 1024 px: the header across the top in one line, a left tab rail (once there is more than
+ *   one tab) and the main panel.
+ * - 641–1023 px: the header in two lines (x and Settings, then the rates and the goal), the
+ *   tabs as a row, the main panel.
+ * - ≤ 640 px: the same header, compact, a fixed bottom tab bar and safe-area insets; the main
+ *   panel keeps room at the bottom so the floating Max all never covers a row.
+ * - The header is sticky: `scroll-padding-top` reserves its height (`--shell-header-h`, kept by
+ *   Layout.tsx), so a focused control is never scrolled under it (§18), and up to 640 px
+ *   `scroll-padding-bottom` keeps focused controls clear of the floating Max all.
+ */
+html {
+  scroll-padding-top: calc(var(--shell-header-h, 0px) + 0.5rem);
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas: 'header' 'tabs' 'main';
+}
+
+.shell-header {
+  grid-area: header;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  padding: max(0.5rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 0.5rem
+    max(1rem, env(safe-area-inset-left));
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.shell-x {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.shell-x-label {
+  color: var(--text-muted);
+}
+
+.shell-x-value {
+  font-size: 1.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.shell-rates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+  color: var(--text-muted);
+}
+
+.shell-goal {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.shell-goal-bar {
+  display: block;
+  height: 0.25rem;
+  border-radius: 0.125rem;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.shell-goal-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.shell-settings {
+  margin-inline-start: auto;
+}
+
+.shell-settings[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+
+.shell-tabs {
+  grid-area: tabs;
+  padding: 0.5rem max(1rem, env(safe-area-inset-left));
+}
+
+.shell-tabs [role='tablist'] {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.shell-tabs [role='tab'][aria-selected='true'] {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+[role='tab'][data-badge]::after {
+  content: '';
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-inline-start: 0.375rem;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+.shell-main {
+  grid-area: main;
+  min-width: 0;
+  padding: 0.75rem max(1rem, env(safe-area-inset-right)) calc(1rem + env(safe-area-inset-bottom))
+    max(1rem, env(safe-area-inset-left));
+}
+
+.shell-main > * {
+  max-width: 72rem;
+}
+
+@media (min-width: 1024px) {
+  .shell[data-has-tabs] {
+    grid-template-columns: 12rem minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: 'header header' 'tabs main';
+  }
+
+  .shell[data-has-tabs] .shell-tabs [role='tablist'] {
+    flex-direction: column;
+  }
+
+  .shell[data-has-tabs] .shell-tabs [role='tab'] {
+    text-align: start;
+  }
+}
+
+@media (max-width: 1023px) {
+  /* Two lines: x and Settings on the first, the rates and the goal chip on the second. */
+  .shell-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'x settings' 'rates goal';
+    gap: 0.25rem 0.5rem;
+    padding-bottom: 0.375rem;
+  }
+
+  .shell-x {
+    grid-area: x;
+  }
+
+  .shell-settings {
+    grid-area: settings;
+  }
+
+  .shell-rates {
+    grid-area: rates;
+    gap: 0 0.75rem;
+    min-width: 0;
+  }
+
+  .shell-goal {
+    grid-area: goal;
+    justify-self: end;
+  }
+}
+
+@media (max-width: 640px) {
+  html {
+    scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+
+  .shell-x-value {
+    font-size: 1.375rem;
+  }
+
+  /* Room for the floating Max all (and the bottom tab bar once there is one). */
+  .shell-main {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+
+  .shell-tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    padding: 0.25rem max(0.5rem, env(safe-area-inset-right))
+      calc(0.25rem + env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+  }
+
+  .shell-tabs [role='tab'] {
+    flex: 1 1 0;
+  }
+
+  .shell[data-has-tabs] .shell-main {
+    padding-bottom: calc(9rem + env(safe-area-inset-bottom));
+  }
+}

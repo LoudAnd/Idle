@@ -237,7 +237,8 @@ Notes: deviations are recorded in GDD v1.3 (§25). A purchase produces during it
 the jsdom "x = 0 after Buy" is checked on the committed state while the header preview already
 shows 0.100. The bot uses the `sim2.py` greedy rule; seeds vary only a 0–2 s reaction delay.
 Seeds 1–3: G5 at 5.22–5.23 min, G8 at 10.70–10.78 min, x ≥ 2^128 at 11.87–11.92 min (active)
-and 90.37–90.50 min (idle); `docs/balance/M2.md`.
+and 90.37–90.50 min (idle); `docs/balance/M2.md`. Commit `99f494e`, committed and pushed to
+finish M2.
 
 **Goal:** Make the Sum layer work end to end: eight generators, costs, buy-max, the global
 multiplier, the exact integrator with lazy online integration, the action queue, error
@@ -291,7 +292,7 @@ early pacing.
 - [x] `npm run sim -- --profile active --minutes 30` prints an event timeline into
       `sim-output/` (gitignored).
 - [x] Playtest of `dist/`: 8 rows render, x grows over 5 s, 0 console errors.
-- [ ] `npm run check` and `npm run build` pass; the game is playable. Committed and pushed.
+- [x] `npm run check` and `npm run build` pass; the game is playable. Committed and pushed.
 
 **Out of scope:** styling, saves, Product, discovery.
 
@@ -299,7 +300,14 @@ early pacing.
 
 ## M3 — Sum layer shell and onboarding framework
 
-Status: planned
+Status: done
+
+Notes: deviations are recorded in GDD v1.4 (§25). Settings v1 also holds the integer threshold
+and UI fps; Settings is a header button (no tab list while only Sum exists); rates are exact
+(A_k · m_k); the one-at-a-time highlight moves to M16. Build: four woff2 files (51.5 KB), JS
+36.3 KB gzip. The playtest's fake-clock silhouette step failed 1 of 5 full runs at the gate:
+Playwright's `pauseAt` can step `performance.now()` back 1 s, so x is still below 50 (the jsdom
+test covers the rule).
 
 **Goal:** Turn the raw screen into the real shell. That means header, tabs, full generator rows,
 hotkeys and themes. Add the text-free onboarding framework (reveal at half cost, Next goal,
@@ -329,35 +337,35 @@ breakdown tooltips, time-to-afford) that every later feature plugs into.
 
 **Acceptance criteria:**
 
-- [ ] A new game's DOM shows only the header (x = 10), the Generator 1 row and the Settings
+- [x] A new game's DOM shows only the header (x = 10), the Generator 1 row and the Settings
       button.
-- [ ] The Generator 2 silhouette appears when x first reaches 50 (half its cost), dimmed, with
+- [x] The Generator 2 silhouette appears when x first reaches 50 (half its cost), dimmed, with
       "Buy 1 · 100"; it becomes a normal row at its first purchase. Every reveal rule has a unit
       test, including the layer thresholds 2^127, 2^1023 and 2^65535.
-- [ ] Next goal chip: a table test over 10 states (nearest unlock, log-scale percentage),
+- [x] Next goal chip: a table test over 10 states (nearest unlock, log-scale percentage),
       including x = 0, which shows 0%.
-- [ ] Breakdown factors multiply to the displayed m_k within 1e-9 in log space, for 50 random
+- [x] Breakdown factors multiply to the displayed m_k within 1e-9 in log space, for 50 random
       states.
-- [ ] Hotkeys (jsdom): `Digit1`–`Digit8`, Shift + digit (also when `event.key` is "!" or "&"),
+- [x] Hotkeys (jsdom): `Digit1`–`Digit8`, Shift + digit (also when `event.key` is "!" or "&"),
       `KeyM` and `KeyG` work. Nothing fires when focus is in an input, textarea, select or
       contenteditable element, or when Ctrl, Meta or Alt is held.
-- [ ] The string lint passes on `src/` and fails on planted fixtures: a 33-character entry, a
+- [x] The string lint passes on `src/` and fails on planted fixtures: a 33-character entry, a
       sentence, a JSX text literal, a string-literal `aria-label`, a literal `label:` in
       `src/engine/content`, and a letter literal in `format.ts`. A template with a decimal
       (`ρ_k ×(1 − 0.03c)`) passes.
-- [ ] The templates test passes for every content id with a `templateId` that exists so far, and fails on a planted
+- [x] The templates test passes for every content id with a `templateId` that exists so far, and fails on a planted
       mismatch.
-- [ ] The glyph test passes on `strings.ts` and fails on a planted character outside the
+- [x] The glyph test passes on `strings.ts` and fails on a planted character outside the
       shipped subsets and the fallback allowlist.
-- [ ] The ×10^Y/min readout equals Δlog10 x over the trailing 60 s (synthetic samples), skips
+- [x] The ×10^Y/min readout equals Δlog10 x over the trailing 60 s (synthetic samples), skips
       samples with x = 0, and shows `—` with fewer than 2 positive samples.
-- [ ] Fonts: the build emits exactly the four JetBrains Mono woff2 files (about 52 KB), and the
+- [x] Fonts: the build emits exactly the four JetBrains Mono woff2 files (about 52 KB), and the
       `unicode-range` values in `fonts.css` equal the package's `unicode.json`.
-- [ ] Settings: an invalid field gets its default, an unknown key is dropped, and the v1
+- [x] Settings: an invalid field gets its default, an unknown key is dropped, and the v1
       fixture loads.
-- [ ] Playtest: no horizontal scroll at 375 px, mobile tap targets at least 44 px, screenshots
+- [x] Playtest: no horizontal scroll at 375 px, mobile tap targets at least 44 px, screenshots
       at 375×667 and 1280×800.
-- [ ] JS bundle is at most 120 KB gzip.
+- [x] JS bundle is at most 120 KB gzip.
 - [ ] `npm run check` and `npm run build` pass; the game is playable. Committed and pushed.
 
 **Out of scope:** persistence, other tabs, sound, icons.
@@ -708,8 +716,8 @@ Credits screen and `CREDITS.md`.
   - `scripts/assets/credits.mjs` → `CREDITS.md` (with an OEIS section marked CC BY-SA 4.0) and
     `src/data/generated/credits.json` (icons, sounds, music, fonts and libraries only)
   - the full Settings → Credits tab, with the OEIS part read from `oeis.json` at runtime
-- Licence files in `public/LICENSES/`: `CC-BY-3.0.txt`, `OFL-1.1.txt`, and MIT notices for
-  Preact and break_eternity.js.
+- Licence files in `public/LICENSES/`: `CC-BY-3.0.txt` (`OFL-1.1.txt` ships since M3, the MIT
+  notices for Preact and break_eternity.js since M1).
 - Tests: `tests/assets/icons.test.ts` (check), `tests/assets/icons-source.test.ts` (nightly),
   `tests/assets/manifest.test.ts`.
 
@@ -1155,6 +1163,7 @@ high-contrast and large fonts. Wire every setting in GDD §19 except music.
 - Screen readers: a spoken `aria-label` on every number.
 - Hotkeys: the `?` overlay and the N readout.
 - Every non-music setting persisted (settings v5).
+- Onboarding highlight (GDD §17.4) and its setting.
 
 **Acceptance criteria:**
 
@@ -1167,6 +1176,8 @@ high-contrast and large fonts. Wire every setting in GDD §19 except music.
 - [ ] Contrast is at least 4.5:1 for text and at least 3:1 for UI elements, in every theme.
 - [ ] At 150% font scale there is no horizontal scroll at 375 px.
 - [ ] Every number node has a spoken `aria-label` (scan test).
+- [ ] The pulsing onboarding outline marks the cheapest useful action, one at a time, and stops
+      after that action has been done 3 times; the setting turns it off (jsdom test).
 - [ ] Every GDD §19 setting except the music settings persists and applies (table test); the
       settings v4 → v5 migration passes.
 - [ ] `npm run check` and `npm run build` pass; the game is playable. Committed and pushed.

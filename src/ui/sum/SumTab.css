@@ -1,109 +1,364 @@
 /*
- * The Sum tab's minimal layout (M2; M3's theme and generator row replace it). Layout only, no
- * colours. Column widths are fixed fractions of the table, never of the content, so buttons
- * do not move sideways as numbers grow (GDD §21.4); below 640 px each row becomes a 2-line card
- * (GDD §17.6), so nothing scrolls sideways at 375 px.
+ * The Sum tab (GDD §17.3, §17.6, §18, §21.4).
+ * - Wide enough (the rows' container at least 70rem, a container query on `.sum-rows`, so a
+ *   later tab rail narrows it too): a table with fixed column widths (fractions of the table,
+ *   never of the content), so buttons never move sideways as numbers grow. The widths fit the
+ *   widest allowed format (precision 4, integer threshold 1e9). Number columns are
+ *   right-aligned; `×` and its number never wrap apart.
+ * - Narrower: each row is a card, its information cells first and its buttons in a row of three
+ *   below, Buy 1, Until 10 and Max always in the same columns (the global row included), so
+ *   nothing scrolls sideways at 375 px.
+ * - Every rule is scoped to `.sum-table`, so the breakdown's own table is never styled as a
+ *   generator row.
+ * - Buttons: solid border and ✓ when the full price is covered, dashed with ≈ t otherwise
+ *   (`data-afford`, never colour alone); disabled buttons are at 70% (theme.css). Every control
+ *   is at least 2.75rem (44 px) in both dimensions.
+ * - Silhouettes are dimmed with a dashed border and the muted text colour; at their opacity the
+ *   muted text stays at ≥ 4.5:1 on the page background (`tests/unit/theme.test.ts` reads the
+ *   opacity from this file). New rows fade in once over 150 ms (`[data-reveal]`, theme.css).
  */
 .sum-tab {
-  max-width: 64rem;
+  position: relative;
 }
 
-.sum-tab table {
+.sum-rows {
+  container: sum / inline-size;
+}
+
+.sum-table {
   width: 100%;
   table-layout: fixed;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0 0.25rem;
 }
 
-.sum-tab .c-tier {
-  width: 15%;
+.sum-table .c-tier {
+  width: 9.5%;
 }
-.sum-tab .c-amount {
-  width: 21%;
+.sum-table .c-amount {
+  width: 16%;
 }
-.sum-tab .c-mult {
-  width: 14%;
+.sum-table .c-step {
+  width: 11.5%;
 }
-.sum-tab .c-one {
-  width: 18%;
+.sum-table .c-mult {
+  width: 11.5%;
 }
-.sum-tab .c-until {
-  width: 20%;
-}
-.sum-tab .c-max {
+.sum-table .c-rate {
   width: 12%;
 }
+.sum-table .c-one {
+  width: 14%;
+}
+.sum-table .c-until {
+  width: 15%;
+}
+.sum-table .c-max {
+  width: 10.5%;
+}
 
-.sum-tab th,
-.sum-tab td {
+.sum-table th,
+.sum-table td {
   padding: 0.25rem 0.375rem;
   text-align: start;
   vertical-align: middle;
   overflow-wrap: anywhere;
 }
 
-.sum-tab thead th {
+.sum-table thead th {
   font-weight: normal;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  overflow-wrap: normal;
 }
 
-.sum-tab th[scope='row'],
-.sum-tab .num,
+.sum-table th[scope='row'] {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sum-table .amount,
+.sum-table .rate,
+.sum-table [data-mult],
+.sum-table thead .num-col {
+  text-align: end;
+}
+
+.sum-table .rate {
+  color: var(--text-muted);
+}
+
+/* The step cell: "step 14 · 3/10", a 10-segment bar, "term 14 of 34". */
+.sum-table .step {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  padding-inline-start: 0.5rem;
+}
+
+.sum-table .step-text,
+.sum-table .term {
+  display: block;
+  white-space: nowrap;
+}
+
+.sum-table .step-bar {
+  display: flex;
+  gap: 1px;
+  height: 0.3125rem;
+  margin: 0.125rem 0;
+  max-width: 6rem;
+}
+
+.sum-table .step-bar > span {
+  flex: 1 1 0;
+  background: var(--surface-2);
+}
+
+.sum-table .step-bar > span[data-on] {
+  background: var(--accent);
+}
+
+.sum-table button.mult {
+  width: 100%;
+  padding-inline: 0.375rem;
+  text-align: end;
+  white-space: nowrap;
+}
+
+.sum-table button.mult[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+
+.sum-tab button.buy {
+  width: 100%;
+  text-align: start;
+  line-height: 1.25;
+}
+
+.sum-tab button.buy[data-afford='yes'] {
+  border-style: solid;
+  border-color: var(--ok);
+}
+
+.sum-tab button.buy[data-afford='no'] {
+  border-style: dashed;
+}
+
 .sum-tab button .label,
 .sum-tab button .cost {
   white-space: nowrap;
 }
 
-.sum-tab .num {
-  font-variant-numeric: tabular-nums;
+.sum-tab button .status {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
-.sum-tab td button {
+.sum-tab button .status[data-status='yes'] {
+  color: var(--text);
+}
+
+/* Silhouettes (§17.3): dimmed until the first purchase. */
+.sum-table .silhouette {
+  opacity: 0.85;
+}
+
+.sum-table .silhouette th[scope='row'] {
+  font-weight: normal;
+  color: var(--text-muted);
+}
+
+.sum-table .silhouette button.buy {
+  background: transparent;
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
+.sum-maxall {
+  margin: 0.5rem 0 0;
+}
+
+.sum-maxall button.buy {
+  width: auto;
+  min-width: 8rem;
+  font-weight: 500;
+}
+
+/*
+ * The breakdown: from 641 px a popover anchored under its trigger (`--anchor-top` and
+ * `--anchor-left` are set by Breakdown.tsx, relative to `.sum-tab`), below the sticky header;
+ * up to 640 px a bottom sheet.
+ */
+.breakdown {
+  position: absolute;
+  z-index: 5;
+  top: var(--anchor-top, 0);
+  left: var(--anchor-left, auto);
+  width: min(22rem, 100%);
+  max-height: calc(100vh - 8rem);
+  overflow: auto;
+  padding: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 0.35);
+  box-sizing: border-box;
+}
+
+.breakdown p {
+  margin: 0.25rem 0;
+}
+
+.breakdown table {
   width: 100%;
-  min-height: 2.75rem;
-  touch-action: manipulation;
+  border-collapse: collapse;
 }
 
-@media (max-width: 640px) {
-  .sum-tab table,
-  .sum-tab thead,
-  .sum-tab tbody {
+.breakdown th,
+.breakdown td {
+  padding: 0.125rem 0;
+  font-weight: normal;
+  vertical-align: baseline;
+}
+
+.breakdown th {
+  text-align: start;
+  padding-inline-end: 0.75rem;
+}
+
+.breakdown td {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.breakdown [data-close] {
+  margin-top: 0.5rem;
+}
+
+@container sum (width < 70rem) {
+  .sum-table,
+  .sum-table thead,
+  .sum-table tbody {
     display: block;
   }
 
-  .sum-tab colgroup {
+  .sum-table colgroup {
     display: none;
   }
 
-  /* Line 1: header, amount, multiplier; line 2: the three buy controls. */
-  .sum-tab tr {
+  .sum-table thead tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.75rem;
+  }
+
+  .sum-table thead tr > * {
+    padding: 0;
+  }
+
+  .sum-table thead td {
+    display: none;
+  }
+
+  /* A card: information cells, then the buttons in a row of three. */
+  .sum-table tbody tr {
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));
     gap: 0.25rem;
     padding: 0.375rem 0;
+    border-bottom: 1px solid var(--surface-2);
   }
 
-  .sum-tab tr > * {
+  .sum-table tbody tr > *,
+  .sum-table .step {
     padding: 0;
   }
 
-  .sum-tab tr > :nth-child(1) {
-    grid-column: span 4;
-  }
-  .sum-tab tr > :nth-child(2) {
-    grid-column: span 5;
-  }
-  .sum-tab tr > :nth-child(3) {
-    grid-column: span 3;
-  }
-  .sum-tab tr > :nth-child(n + 4) {
-    grid-column: span 4;
-  }
-  .sum-tab thead tr > :nth-child(4) {
-    grid-column: span 12;
+  .sum-table tbody tr > .gap {
+    display: none;
   }
 
-  .sum-tab button .label,
-  .sum-tab button .cost {
-    display: inline-block;
+  .sum-table .amount,
+  .sum-table .rate,
+  .sum-table [data-mult],
+  .sum-table thead .num-col {
+    text-align: start;
+  }
+
+  .sum-table tbody tr > th {
+    grid-column: span 4;
+  }
+  .sum-table tbody tr > .amount {
+    grid-column: span 8;
+  }
+  .sum-table tbody tr > .step {
+    grid-column: span 5;
+  }
+  .sum-table tbody tr > [data-mult] {
+    grid-column: span 3;
+  }
+  .sum-table tbody tr > .rate {
+    grid-column: span 4;
+  }
+
+  /* The buttons: the same three columns in every row, so Max sits under Max. */
+  .sum-table tbody tr > .buy-one {
+    grid-column: 1 / span 4;
+  }
+  .sum-table tbody tr > .buy-until {
+    grid-column: 5 / span 4;
+  }
+  .sum-table tbody tr > .buy-max {
+    grid-column: 9 / span 4;
+  }
+
+  /* The global row: "Global | level 12 | ×5.35" on its information line. */
+  .sum-table tbody tr[data-global] > .amount {
+    grid-column: span 5;
+  }
+
+  /* A tier silhouette shows only its Buy 1: its (visually hidden) header takes no grid cell. */
+  .sum-table tbody tr.silhouette {
+    position: relative;
+  }
+
+  .sum-table tbody tr.silhouette[data-tier] > th {
+    position: absolute;
+  }
+
+  .sum-table .step-bar {
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .sum-maxall {
+    position: fixed;
+    z-index: 15;
+    right: max(1rem, env(safe-area-inset-right));
+    bottom: calc(1rem + env(safe-area-inset-bottom));
+    margin: 0;
+  }
+
+  .sum-maxall button {
+    box-shadow: 0 0.25rem 0.75rem rgb(0 0 0 / 0.35);
+    background: var(--surface);
+  }
+
+  .breakdown {
+    position: fixed;
+    z-index: 20;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 70vh;
+    border-radius: 0.75rem 0.75rem 0 0;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
   }
 }
