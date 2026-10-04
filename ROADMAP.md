@@ -102,8 +102,7 @@ prototype scripts behind the GDD's reference numbers are in
 Status: done
 
 Notes: scaffold commit `2f3b4f2`. The design documents (`docs/GAME_DESIGN.md`, this roadmap and
-`docs/prototypes/`) are committed and pushed to finish M0; the M1 commit records that sha here
-and ticks the last box.
+`docs/prototypes/`) are commit `f0396fc`, committed and pushed to finish M0.
 
 **Goal:** Set up a buildable, testable project skeleton and an authoritative design and
 roadmap, so every later milestone can be executed independently.
@@ -123,7 +122,7 @@ roadmap, so every later milestone can be executed independently.
 - [x] `npm run check` and `npm run build` pass.
 - [x] `docs/SOURCES.md` lists the 4 pinned sources and their licence obligations.
 - [x] `docs/GAME_DESIGN.md`, `docs/prototypes/` and this roadmap are written.
-- [ ] Committed and pushed. (Ticked, with the docs commit's sha, by the M1 commit.)
+- [x] Committed and pushed. (Ticked, with the docs commit's sha, by the M1 commit.)
 
 **Out of scope:** any game code.
 
@@ -131,7 +130,13 @@ roadmap, so every later milestone can be executed independently.
 
 ## M1 — Number core, notation, architecture guards and minimal CI
 
-Status: planned
+Status: done
+
+Notes: deviations are recorded in GDD v1.2 (§25). `9.995e5 → 1.00e6` holds at integer threshold
+1e3 (the default 1e6 shows `999,500`). The Engineering width fixture is `999.99e999,996`,
+because `999.99e999,999` has true exponent 1,000,001 and stacks. Height 18 is stored on layer 1
+(resolution about 5.5e-7), not layer 2. The CI `bench` job comes with M9 (GDD §23);
+`npm run bench -- --guard 3` already applies the ×3 guard.
 
 **Goal:** Pin the big-number library behind one wrapper with safe helpers, and implement every
 notation. Add the architecture tests that keep the engine pure and enforce the asset rule from
@@ -162,7 +167,7 @@ the first line of game code, and start CI.
 
 **Acceptance criteria:**
 
-- [ ] The format table test has at least 60 cases, including:
+- [x] The format table test has at least 60 cases, including:
 
   | Input                       | Output        |
   | --------------------------- | ------------- |
@@ -180,41 +185,41 @@ the first line of game code, and start CI.
   | 9.99999e305 (Standard)      | `1.00e306`    |
   | 1e-5                        | `1.00e-5`     |
 
-- [ ] The spoken form of 1.23e45 is "1.23 times ten to the 45", with the words taken from the
+- [x] The spoken form of 1.23e45 is "1.23 times ten to the 45", with the words taken from the
       `strings.ts` table.
-- [ ] Property test over 10,000 random values (layers 0–3) plus the fixed inputs 0, 1e-400 and
+- [x] Property test over 10,000 random values (layers 0–3) plus the fixed inputs 0, 1e-400 and
       values in (0, 1):
   - output never contains `NaN`, `Infinity`, `undefined` or `-0`
   - widths meet the GDD §4.2 table for every notation, and the table's own boundary fixtures
     pass: `2.00e19,728` (11), `9.99e999,999` (12), `1.00e-999,999` (13), `999.99e999,999`
     (14, Engineering), `999.99NoNog` (11, Standard), `999,999,999` (11, threshold 1e9)
   - weak monotonicity: for v1 ≤ v2, parse(format(v1)) ≤ parse(format(v2)), per notation
-- [ ] The format tests pass under `LANG=de_DE.UTF-8` (grouping does not use the locale).
-- [ ] Safe logs: `log10Pos(0)` is `null`, `log10Floor1(0)` and `log10Floor1(1e-400)` are 0,
+- [x] The format tests pass under `LANG=de_DE.UTF-8` (grouping does not use the locale).
+- [x] Safe logs: `log10Pos(0)` is `null`, `log10Floor1(0)` and `log10Floor1(1e-400)` are 0,
       and neither ever returns NaN (property test).
-- [ ] `floorGain` threshold tests: at 2^128·n^40 (n = 1, 2), 2^1024·n^256 (n = 1, 2) and
+- [x] `floorGain` threshold tests: at 2^128·n^40 (n = 1, 2), 2^1024·n^256 (n = 1, 2) and
       2^(2^(h+15)) (h = 1, 2), the threshold pays n, threshold·(1 + ε) pays n, and
       threshold·(1 − ε) pays n − 1, with ε = 1e-12 for the first two and 1e-9 for the last.
-- [ ] `subClamp` never returns a negative value; `isValidNum` rejects NaN, ±Infinity and
+- [x] `subClamp` never returns a negative value; `isValidNum` rejects NaN, ±Infinity and
       negatives.
-- [ ] The codec round-trips exactly for 0, 1, −5, 1e-10, 1.5e-300, 10, 2^128, 1e308, 2^1024,
+- [x] The codec round-trips exactly for 0, 1, −5, 1e-10, 1.5e-300, 10, 2^128, 1e308, 2^1024,
       2^65536, 10^10^20 and 10↑↑5.
-- [ ] `npm run bench` reports 100,000 mixed `Num` operations (budget 250 ms; the CI bench job
+- [x] `npm run bench` reports 100,000 mixed `Num` operations (budget 250 ms; the CI bench job
       uses a ×3 guard). `npm run check` contains no timing assertion.
-- [ ] Each architecture test fails on its planted fixture and passes on `src/`:
+- [x] Each architecture test fails on its planted fixture and passes on `src/`:
   - `Math.random`, `Date`, `document` or `window` in `src/engine`
   - a `break_eternity.js` import outside `num.ts`
   - a raw `.log10()` or `.log2()` call outside `num.ts`
   - `createOscillator`, `createBuffer`, `new AudioBuffer` or `copyToChannel` anywhere in `src`
   - a relative import without `.ts` in `src/engine`
-- [ ] `tests/arch/node-import.test.ts` spawns `node`, imports `src/engine/format.ts` through
+- [x] `tests/arch/node-import.test.ts` spawns `node`, imports `src/engine/format.ts` through
       type stripping, and prints a formatted value.
-- [ ] ADR 001 records the choice of break_eternity.js 2.1.3, the alternatives rejected
+- [x] ADR 001 records the choice of break_eternity.js 2.1.3, the alternatives rejected
       (break_infinity, log-space doubles), the codec, and the measured pitfalls (log10(0) is
       NaN; log2(2^1280) is 1279.9999999999993; layer-2 resolution at height 18).
-- [ ] `ci.yml` is pushed, or the fallback is in place and recorded; `npm run ci` runs `npm ci`,
+- [x] `ci.yml` is pushed, or the fallback is in place and recorded; `npm run ci` runs `npm ci`,
       check and build locally.
-- [ ] `playwright@1.56.1` is a devDependency; `npm install` downloads no browsers locally, and
+- [x] `playwright@1.56.1` is a devDependency; `npm install` downloads no browsers locally, and
       `npm run playtest` still runs with the preinstalled chromium-1194.
 - [ ] `npm run check` and `npm run build` pass. The scaffold page still builds. M0's last box is
       ticked with the docs commit's sha. Committed and pushed.

@@ -111,15 +111,22 @@ says where: `check` is `npm run check` (local and CI, no source clones), `pipeli
 | `tests/arch/strings.test.ts`       | check    | `strings.ts` entries ≤ 32 chars and no sentence (`/[a-z]{3,}\s[a-z]{3,}.*[.!?](\s\|$)/i`; the trailing `(\s\|$)` lets decimals such as `0.03c` through, and a planted fixture proves it). In `src/ui/**/*.tsx` outside `strings.ts`/`legal.ts`: no JSX text literal with ≥ 2 letters, and no string-literal JSX attribute with ≥ 2 letters (`aria-label`, `title`, `placeholder`, `alt`, `label`). In `src/engine/content/**`: every `label:` is a `strings.ts` key. `format.ts` contains no letter-only string literals of 2+ letters except via its table parameter |
 | `tests/arch/templates.test.ts`     | check    | Every content id has exactly the Appendix C template in `strings.ts`, and every Appendix C row has a content id |
 | `tests/arch/glyphs.test.ts`        | check    | Every code point in `strings.ts` is in the shipped font subsets (§16.5) or in the fallback allowlist           |
-| `tests/arch/audio.test.ts`         | check    | No `createOscillator`, `createBuffer`, `new AudioBuffer`, `getChannelData(...)` writes or `copyToChannel` in `src/` |
-| `tests/arch/engine-purity.test.ts` | check    | `src/engine` uses no `window`, `document`, `Date`, `performance`, `Math.random` or UI/platform imports         |
-| `tests/arch/num.test.ts`           | check    | Only `src/engine/num.ts` imports `break_eternity.js`                                                          |
+| `tests/arch/audio.test.ts`         | check    | No `createOscillator`, `createBuffer`, `new AudioBuffer`, `getChannelData` (banned outright, not only its writes) or `copyToChannel` in `src/`, nor the other synthesis APIs (`createPeriodicWave`, `createConstantSource`, `createScriptProcessor`, `audioWorklet`, `AudioWorkletNode`, `OscillatorNode`, `OfflineAudioContext`); strings are scanned too, so `ctx['createOscillator']` is caught. Also no WAV built in JavaScript and played through allowed playback (the jsfxr/riffwave route): no `data:audio` URI, no `'RIFF'`/`'WAVE'`/`'fmt '` header literal or constant, no audio MIME literal outside `canPlayType`, and no typed arrays, ArrayBuffers, DataViews or object URLs in a file that plays audio. `public/` holds no scripts and `index.html` no inline script, so every shipped script is under `src/` |
+| `tests/arch/engine-purity.test.ts` | check    | `src/engine` uses no `window`, `document`, `Date`, `performance`, `Math.random` or UI/platform imports, nor the other environment globals (`globalThis`, `self`, `navigator`, `location`, storage including `indexedDB`, timers including `queueMicrotask`/`setImmediate`, `requestAnimationFrame`, `fetch`, workers and channels, `process`, `Buffer`, `crypto`, `Intl`, `eval`, `toLocale*String`), no `Math` other than as `Math.<name>` (so `Math['random']` and destructuring are caught), no `import.meta` and no `Function` constructor; relative imports stay in `src/engine` and end in `.ts`; the only bare import is `break_eternity.js`, from `num.ts`. `npm run typecheck` also checks `src/engine` with `tsconfig.engine.json` (lib ES2023, no DOM or Node types), so a missed global is a compile error |
+| `tests/arch/num.test.ts`           | check    | Only `src/engine/num.ts` imports `break_eternity.js` (static, type-only, dynamic or `require`, including subpaths); no raw log method on a `Num` outside `num.ts` (`.log10()`, `.log2()`, `.ln()`, `.log(b)`, `.absLog10()`, `.pLog10()`, `.logarithm(b)`, also via `?.` or a bracketed name; `Math` logs of doubles are allowed); nothing in `src/` calls the bench-only `installOpCounter` |
+| `tests/arch/licenses.test.ts`      | check    | Every runtime dependency is MIT and its `LICENSE` ships verbatim as `public/LICENSES/MIT-<name>.txt` (Preact and break_eternity.js from M1) |
+| `tests/arch/node-import.test.ts`   | check    | A plain `node` imports `src/engine/format.ts` through type stripping and prints a formatted value (§21.6) |
 | `tests/assets/manifest.test.ts`    | check    | Every file in `public/assets/**` and `src/data/generated/**` has a manifest record (source repo, commit, path, source sha256, output sha256, SPDX licence, author, transforms, `verified: true`), and every output's sha256 matches its record |
 | `tests/assets/oeis.test.ts`        | check    | Committed `oeis.json`: filters (none contains `(AT)`, `@`, `http`, `www.` or ` writes:`), term counts, window rules, record costs, header |
 | `tests/assets/oeis-source.test.ts` | nightly  | Every exported OEIS string is an exact substring of its source `.seq` at the pinned commit (`it.skipIf(!process.env.ASSET_SRC_OEIS)`) |
 | `tests/assets/icons.test.ts`       | check    | No background square remains; every fill is `currentColor`; the role table matches §16.2                      |
 | `tests/assets/icons-source.test.ts`| nightly  | Only artist folders listed in game-icons `license.txt` are used (`badges/` and `various-artists/` are not listed); each `artists.json` name is a verbatim substring of `license.txt` (`it.skipIf(!process.env.ASSET_SRC_ICONS)`) |
 | `tests/assets/sfx-source.test.ts`  | nightly  | Each source file's sha256 equals the `index.json` field for its format (`it.skipIf(!process.env.ASSET_SRC_SFX)`) |
+
+**Scanner.** The arch tests share one tokenizer (`tests/arch/lib/scan.ts`) that understands
+comments, strings, template literals and regex literals, and fails closed: a file that ends
+inside a block comment, template or `${…}` is a violation of every rule, so no construct can
+silently blank out the code after it.
 
 **Where the checks run.** CI never has the source clones (§23). So the pipeline does every
 check against the sources when it runs: exact substrings, licence files, artist names and
@@ -162,38 +169,75 @@ Why this library:
 - The Tower layer reaches log10 x ≈ 2.6e9 (height 18), and the backlog's Pentation layer goes
   well past break_infinity's ceiling of about 1e9e15.
 - Its speed is enough. Measured at 0.4–0.5 µs per operation (100k mixed operations in
-  40–50 ms), the per-tick budget of ≤ 400 `Num` operations costs ≤ 0.2 ms.
+  40–50 ms), the per-tick budget of ≤ 400 `Num` operations costs ≤ 0.2 ms. M1's
+  `npm run bench` measures about 0.2 µs per operation (ADR 001).
 - Switching libraries later would need a save migration, which is the worst kind of late risk.
 
 `num.ts` exports:
 
 - the `Num` type
 - `num()`, `ZERO`, `ONE`, `CAP` (2^1024) and `TOWER1` (2^65536)
-- log helpers: `log10`, `log2`, `pow10`, `pow2`
+- log helpers: `log10`, `log2`, `pow10`, `pow2`, plus `slog10` and `tetrate10` for the
+  `10↑↑h` notation. `pow10` and `pow2` are exact: results beyond layer 0 are built from
+  components (`mag = e`, or `e·log10 2` rounded once from a double-double product, so it is the
+  correctly rounded value for every exponent; a plain `e * Math.log10(2)` rounds twice and is
+  one ulp off for about 6% of integers, 2^1023 and 2^65535 among them), and small results with
+  integer exponents are exact doubles. The library's own `Decimal.pow` is not (ADR 001).
 - **safe logs** for every log of a value that can be 0. In break_eternity.js 2.1.3,
   `new Decimal(0).log10()` returns NaN, and x is exactly 0 right after the first G1 purchase.
-  - `log10Pos(x)`: `null` if x ≤ 0, otherwise log10 x. Callers must handle `null`.
-  - `log10Floor1(x)`: log10(max(x, 1)), which is always ≥ 0.
-  - Engine code never calls `log10`/`log2` on a value that can be 0. A lint test bans raw
-    `.log10()`/`.log2()` calls outside `num.ts`.
+  - `log10Pos(x)`: `null` if x ≤ 0 (or x is not a finite `Num`), otherwise log10 x as a
+    double. Callers must handle `null`. `log2Pos(x)` is the same in base 2.
+  - `log10Floor1(x)`: log10(max(x, 1)), which is always finite and ≥ 0 (0 for invalid input).
+  - Results beyond the double range (inputs on layer ≥ 2 with mag ≥ 308.25) saturate to
+    ±`Number.MAX_VALUE`.
+  - Engine code never calls `log10`/`log2` on a value that can be 0. A lint test bans raw log
+    methods on a `Num` outside `num.ts`: `.log10()`, `.log2()`, `.ln()`, `.log(b)`,
+    `.absLog10()`, `.pLog10()` and `.logarithm(b)` (all NaN at 0 in 2.1.3), also through `?.`
+    or a bracketed name. Logs of doubles through `Math` are allowed, because the recipes below
+    need them (`pow2(base + d·Math.log2(n/μ))`, `log2Dec` in §10.3).
 - `floorGain(v, x, threshold)`, the one helper for every floor-at-threshold gain (§7, §8.2,
   §10.1). It takes the candidate n = ⌊v⌋ from the log formula, then corrects it by at most 1
   with exact `Num` comparisons: n+1 if x ≥ threshold(n+1), n−1 if x < threshold(n). In 2.1.3,
   log2(2^1280) = 1279.9999999999993, so the raw floor would give E_gain = 1 at 2^1280.
+  - It returns a `Num` (an integer value ≥ 0), because post-lift gains outgrow doubles: P_gain
+    passes 2^53 at x ≈ 2^2248 and the double range at 2^41088 (below `TOWER1`), E_gain passes
+    2^53 at 2^14592 and the double range at 2^263168 (Tower height ≈ 3).
+  - The ±1 correction applies only below `EXACT_GAIN_LIMIT` = 2^52. From there on consecutive
+    thresholds round to the same `Num`, so the candidate itself (floored) is the gain.
+  - `v` may be a `number` or a `Num`. A candidate that can leave the double range is passed as
+    a `Num` built in log space, `pow2((log2Pos(x) − base)/d)`; a `number` +Infinity saturates
+    to `Number.MAX_VALUE` and never falls back to 0 or 1. The result is non-decreasing in v and
+    in x.
+  **Thresholds are computed in log2 space**, as `pow2(base + d·log2(n/μ))`, never as products
+  such as 2^1024 · (n/μ)^256: products round differently (in 2.1.3, `Decimal.pow(2, 1280)` is
+  one ulp below `Decimal.pow(2, 1024)·Decimal.pow(2, 256)`), so a product threshold need not be
+  the value the log formula inverts.
 - `x.sub(cost)` is wrapped as `subClamp(x, cost)` = max(0, x − cost), so a purchase never leaves
-  a negative x.
+  a negative x. Invalid input (x NaN, infinite or negative, or cost NaN or infinite) gives a NaN
+  `Num`, so the invariant below reports the corruption instead of a purchase hiding it as 0.
 - the save codec, which writes a `[sign, layer, mag]` triple with `mag` as a JSON double so the
-  round-trip is exact
+  round-trip is exact. `decodeNum` accepts only canonical (normalized) codes with a safe-integer
+  layer and builds them without normalizing, so it runs in constant time: in 2.1.3, normalizing
+  `[1, L, 0]` steps down one layer per loop iteration, and `[1, 2^53 − 1, 0]` would hang the
+  loader for years.
 - `isValidNum(x)`: finite and ≥ 0. The engine invariant (§20.1) uses it in production before
-  every save.
+  every save. With a `Num` argument it (and `isFiniteNum`) is a plain boolean check, so the
+  value keeps its type in the failing branch that reports it; with `unknown` it is a type guard.
 - an operation counter, compiled in only for `npm run bench` (§22.12), which reports `Num`
-  operations per tick and per macro-step.
+  operations per tick and per macro-step. It is an opt-in `installOpCounter()` in `num.ts`
+  that nothing in `src/` calls (an arch test enforces this), so the app bundle tree-shakes it.
+  It counts every `Decimal` method except conversions and constructors. A bench declares the
+  unit its count is reported in (`units`, `unit`: per tick, per macro-step) and, separately, an
+  optional exact self-check (`expectedCount`) and count budget (`maxCountPerUnit`, 400 per
+  tick, §21.7).
 
-Shared constants are frozen.
+Shared constants are frozen (`Object.freeze`), and their components are snapshot-tested from
+M1: `CAP` = `[1, 1, 308.25471555991675]`, `TOWER1` = `[1, 1, 19728.30179583467]`.
 
-**Resolution at high layers.** At height 18 (log10 x ≈ 2.586e9) the value is stored at layer 2,
-and the smallest representable relative change of x is about 3e-5. `x.add(x·1e-7)` returns x
-unchanged (tested in 2.1.3). §5.5 says how the integrator avoids losing slow growth.
+**Resolution at high layers.** At height 18 (log10 x ≈ 2.586e9) the value is stored at layer 1
+(mag 2.586e9), and the smallest relative change of x that registers is about 5.5e-7 (half an
+ulp of the mag, times ln 10). `x.add(x·1e-7)` returns x unchanged (tested in 2.1.3). §5.5 says
+how the integrator avoids losing slow growth.
 
 **What is not a `Num`:**
 
@@ -202,6 +246,9 @@ unchanged (tested in 2.1.3). §5.5 says how the integrator avoids losing slow gr
 | Bought counts                           | JS integers, asserted ≤ 2^53                                         |
 | Cost and gain exponents (log10 values)  | Doubles. They stay below 2^53 even at height 18.                     |
 | Sequence terms                          | Exact decimal strings in data, BigInt in tests, Float64 log2 tables at runtime |
+
+Gains are `Num`s, not counts: `floorGain` returns a `Num` because post-lift P and E gains pass
+2^53 and the double range (above).
 
 ### 4.2 Notation (`src/engine/format.ts`)
 
@@ -231,19 +278,32 @@ unchanged (tested in 2.1.3). §5.5 says how the integrator avoids losing slow gr
 - **Small integers:** values below the integer threshold are exact, with fixed en-style
   grouping (`999,999`). `format.ts` inserts the commas itself; it never calls `Intl` or
   `toLocaleString`, so output does not depend on the machine's locale. The format tests also run
-  under `LANG=de_DE.UTF-8` (a CI matrix entry) to prove it. The threshold is 1e6 by default; it
-  can be set to 1e3, 1e6 or 1e9.
-- **Small non-integers:** 3 significant digits (`12.3`, `0.456`). Values below 1e-3 use
+  under `LANG=de_DE.UTF-8` (a CI step from M1) to prove it. The threshold is 1e6 by default; it
+  can be set to 1e3, 1e6 or 1e9. Non-integers between 1000 and the threshold show ⌊v⌋, grouped
+  (`1,234` for 1234.9).
+- **Small non-integers:** precision + 1 significant digits, so 3 at the default precision 2
+  (`12.3`, `0.456`), and never fewer than the integer digits. Trailing zeros are kept (`0.500`,
+  `0.00100`, `10.0`), and a value that rounds to 1000 is shown as 1000. Values below 1e-3 use
   negative exponents.
 - **Zero** renders as `0`. Negative values (only in deltas) get a leading `−` (U+2212).
-- **Mantissa rounding never shows 10.** `9.995e5` becomes `1.00e6`, not `10.00e5`.
+- **Mantissa rounding never shows 10.** `9.995e5` becomes `1.00e6`, not `10.00e5` (with the
+  integer threshold at 1e3; at the default 1e6 it is below the threshold and shows `999,500`).
 - **Large exponents:** exponents of 10,000 or more use the same comma grouping (`e19,728`).
   Once the exponent itself reaches 1e6, it is formatted recursively: `e1.23e45`, then
-  `ee1.23e45`.
-- **Tetration form:** above 3 stacked `e`s, show `10↑↑h.hh` (U+2191, in the shipped Latin
-  subset).
+  `ee1.23e45`. "The exponent" is the true exponent ⌊log10 v⌋ after mantissa rounding, for every
+  notation (Engineering included), so `9.996e999,999` becomes `e1.00e6`. A stacked exponent is
+  itself formatted in Engineering in Engineering (`e123.45e45` for 10^(1.2345e47)) and in
+  Scientific in every other notation, Logarithm included (`e1.23e47`). Values below 1e-3 do
+  the same with `e-` (`e-1.00e6` once the exponent reaches −1e6).
+- **Tetration form:** an output holds at most 3 `e` characters (`ee1.23e45` is the deepest
+  e-form). Beyond that, show `10↑↑h.hh` (U+2191, in the shipped Latin subset), with h rounded
+  **up** to the precision (tolerance 1e-9, so 10↑↑5 shows `10↑↑5.00`); rounding to nearest
+  would show `10↑↑4.85` for a value above `ee9.99e999,999` and break the order rule. Heights of
+  1e6 or more use the mantissa form (`10↑↑1.00e6`).
 - **Never** output `NaN`, `Infinity`, `-0` or `undefined`. A non-finite value renders as `—`
-  and raises a dev assertion.
+  and raises a dev assertion. The assertion is the formatter's `onInvalid` option: `format.ts`
+  cannot tell a dev build from a release build (it may not read `import.meta`), so the UI binds
+  it once, `createFormatter(tables, { onInvalid })` (M2), to a hook that throws in dev builds.
 - **Width** at precision 2, for 1e-3 ≤ v (smaller values may add 1 character for the minus
   sign of the exponent):
 
@@ -253,16 +313,22 @@ unchanged (tested in 2.1.3). §5.5 says how the integrator avoids losing slow gr
   | Engineering           | ≤ 11        | ≤ 15                 |
   | Standard              | ≤ 11 below 1e306, then as Scientific | as Scientific |
 
-  With the integer threshold at 1e9 the limit is 11 below 1e9 (`999,999,999`). The property
-  test's own fixtures include the boundary cases: `2.00e19,728` (11), `9.99e999,999` (12),
-  `1.00e-999,999` (13), `999.99e999,999` (14, Engineering), `999.99NoNog` (11, Standard) and
-  `999,999,999` (11, threshold 1e9).
+  With the integer threshold at 1e9 the limit is 11 below 1e9 (`999,999,999`). Widths are
+  bucketed by the displayed value, so a carry such as `1.00e10,000` (for 9.9999e9999) is judged
+  in the column it shows. The property test's own fixtures include the boundary cases:
+  `2.00e19,728` (11), `9.99e999,999` (12), `1.00e-999,999` (13), `999.99e999,996` (14,
+  Engineering; the largest Engineering form below the recursion, since 999.99e999,999 would
+  need exponent 1,000,001), `999.99NoNog` (11, Standard) and `999,999,999` (11, threshold 1e9).
 - **Order:** the formatter is weakly monotone per notation. For v1 ≤ v2,
   parse(format(v1)) ≤ parse(format(v2)), where `parse` is the test's inverse of each notation
   (suffixes, `e` stacks and `10↑↑`). Distinct values may format the same: at precision 2,
   1.230e6 and 1.2349e6 both show `1.23e6`.
 - **Screen-reader form** (an `aria-label` on every number): `1.23e45` is read as "1.23 times ten
-  to the 45". The words come from the `strings.ts` table.
+  to the 45". The words come from the `strings.ts` table, which has two entries: "times ten to
+  the" and "ten to the". Mantissa forms are always read in the Scientific reading, whatever the
+  notation; a stacked form is read as "ten to the" followed by its exponent's reading
+  (`e1.23e45` is "ten to the 1.23 times ten to the 45"); negative exponents use `−` (U+2212);
+  values below the integer threshold, `0`, `—` and `10↑↑h` are read as displayed.
 
 **Fonts** (§16.5): JetBrains Mono (@fontsource, OFL-1.1) for all numbers and UI, with tabular
 figures. Only the Latin (weights 400, 500) and Greek (400, 500) subsets ship. Together they
@@ -578,7 +644,10 @@ so the test can run before the Tower layer ships.
 - **Unlock:** x ≥ 2^128 (3.40e38). The tab reveals at 2^127 (half the threshold, §17.4).
 - **Gain (frozen):** P_gain = ⌊2^((log2 x − 128)/d_P) · μ_P⌋, with d_P = 40 (36 with an
   upgrade). It is computed only for x ≥ 2^128 (below that it is 0, so log2 never sees x = 0),
-  through `floorGain` (§4.1) with threshold(n) = 2^128 · (n/μ_P)^d_P.
+  through `floorGain` (§4.1) with threshold(n) = 2^128 · (n/μ_P)^d_P, computed in log2 space
+  as `pow2(128 + d_P·log2(n/μ_P))`. After the lift the candidate outgrows doubles (2^53 at
+  x ≈ 2^2248, the double range at 2^41088), so it is passed as a `Num`,
+  `pow2((log2 x − 128)/d_P)·μ_P`, and P_gain is a `Num`.
 
   | x       | P_gain (μ_P = 1) |
   | ------- | ---------------: |
@@ -638,10 +707,16 @@ so the test can run before the Tower layer ships.
 
 - **Before the lift:** E_gain = μ_E. That is 1 multiplied by the E multipliers.
 - **After the lift:** E_gain = ⌊2^((log2 x − 1024)/d_E) · μ_E⌋, with d_E = 256 (a knob),
-  computed through `floorGain` with threshold(n) = 2^1024 · (n/μ_E)^d_E. The two formulas meet:
+  computed through `floorGain` with threshold(n) = 2^1024 · (n/μ_E)^d_E, computed in log2
+  space as `pow2(1024 + d_E·log2(n/μ_E))` (as a product it would round differently, §4.1).
+  The candidate is passed as a `Num`, `pow2((log2 x − 1024)/d_E)·μ_E`: as a double it would
+  pass 2^53 at 2^14592 and overflow at 2^263168 (Tower height ≈ 3).
+  The two formulas meet:
   E_gain = 1 at exactly 2^1024, and 2 at 2^1280 (with d_E = 256). The raw floor would give 1 at
-  2^1280, because log2(2^1280) = 1279.9999999999993 in break_eternity.js 2.1.3. Threshold
-  tests for n = 1, 2: threshold(n) pays n, ·(1 + 1e-12) pays n, ·(1 − 1e-12) pays n − 1.
+  2^1280, because log2(2^1280) = 1279.9999999999993 in break_eternity.js 2.1.3 (for the
+  library's own `Decimal.pow(2, 1280)`; `num.ts`'s log-space `pow2(1280)` has log2 exactly
+  1280, but an x reached by play carries no such guarantee). Threshold tests for n = 1, 2:
+  threshold(n) pays n, ·(1 + 1e-12) pays n, ·(1 − 1e-12) pays n − 1.
 - **Reset** clears the Product layer: P, Product upgrades (unless kept by a milestone) and
   autobuyer intervals (unless kept). It keeps:
   - E, Power upgrades and slot loadouts
@@ -919,11 +994,12 @@ every palindrome ≤ 515).
 - **Available** at x ≥ 2^65536 = 2↑↑5 ≈ 2.00e19,728. The tab reveals at 2^65535 (half the
   threshold, §17.4).
 - **Height (frozen):** h = ⌊log2 log2 x⌋ − 15, computed through `floorGain` with
-  threshold(h) = 2^(2^(h+15)).
+  threshold(h) = 2^(2^(h+15)), built in log2 space as `pow2(2^(h+15))` (§4.1).
   - h = 1 at 2^65536 and 2 at 2^131072.
   - Each new height requires squaring x.
-  - log2(2^65536) = 65535.999999999985 in 2.1.3. A raw floor gives h = 1 there only because
-    `Math.log2` happens to round up; the helper makes it safe. Threshold tests (h = 1, 2) use
+  - log2(2^65536) = 65535.999999999985 in 2.1.3 (for `Decimal.pow(2, 65536)`; `num.ts`'s
+    `TOWER1` has log2 exactly 65536). A raw floor gives h = 1 there only because `Math.log2`
+    happens to round up; the helper makes it safe. Threshold tests (h = 1, 2) use
     factors (1 ± 1e-9), because break_eternity cannot
     represent a 1e-12 relative change at 2^65536 (its layer-1 magnitude is about 19,728).
 - **TP gain** = 2^(h−1) · μ_T. That is 1 at h1, 16 at h5 and 128 at h8.
@@ -2035,7 +2111,15 @@ fixtures, M6a for the manifest, M6b for the height report), so
 - Node 22.22 strips types by default. Engine modules use explicit `.ts` imports and
   `erasableSyntaxOnly`, so the asset pipeline and the sim CLI import the same code directly
   (`windows.ts`, `transforms.ts`, `integrate.ts`).
-- tsconfig sets `allowImportingTsExtensions` and `erasableSyntaxOnly`.
+- tsconfig sets `allowImportingTsExtensions` and `erasableSyntaxOnly`, plus
+  `verbatimModuleSyntax` (Node's type stripping keeps an `import { T }` of a type and fails at
+  run time with "does not provide an export named 'T'", so type-only imports must say
+  `import type`) and `noEmit` (which `allowImportingTsExtensions` requires).
+  `tests/arch/node-import.test.ts` checks the whole path with a plain `node`.
+- `tsconfig.engine.json` typechecks `src/engine` (and `src/sim` once it exists, M2) with lib
+  ES2023 and no DOM, Node or Vite types, as part of `npm run typecheck`. Any environment access
+  (`self`, `Buffer`, `location`, `import.meta.env`, `console`, timers) is then a compile error,
+  not only a lint finding.
 
 ### 21.7 Performance budgets
 
@@ -2186,7 +2270,7 @@ errors.
 
 | Workflow                  | From | Runs                                                                                                                                                   |
 | ------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ci.yml` (push, PR)       | M1   | Node 22: `npm ci`, `npm run check`, `npm run build`. M9 adds `check-size`, `verify-manifest`, the quick sim, a `LANG=de_DE.UTF-8` matrix entry for the format tests, and a separate `bench` job with ×3 guards |
+| `ci.yml` (push, PR)       | M1   | Node 22: `npm ci`, `npm run check`, `npm run build`, plus a step that runs the format tests under `LANG=de_DE.UTF-8` (from M1). M9 adds `check-size`, `verify-manifest`, the quick sim and a separate `bench` job with ×3 guards |
 | `e2e.yml`                 | M9   | `npx playwright install --with-deps chromium` (CI only), then the Playwright playtest; uploads screenshots                                            |
 | `nightly.yml` (cron)      | M9   | Long sims (3 profiles × 5 seeds, 30 days), 50 ms reference sims, 100k save fuzz, asset re-extraction from fresh blobless clones of the pinned sources with every `ASSET_SRC_<NAME>` set (so the source-backed tests run), then `git diff --exit-code` |
 | `pages.yml`               | M9   | On push to `claude/idle-game-dev-oq3ded` or manual dispatch: build, `upload-pages-artifact`, `deploy-pages`                                         |
@@ -2339,7 +2423,16 @@ needs 20.
   400/500 woff2 4.2/4.3 KB. Its per-subset CSS files carry no `unicode-range`.
 - **break_eternity.js 2.1.3:** `new Decimal(0).log10()` is NaN; log2(2^1280) =
   1279.9999999999993; log2(2^65536) = 65535.999999999985; at log10 x ≈ 2.586e9, x.add(x·1e-7)
-  returns x.
+  returns x. Measured in M1 (ADR 001, locked by `tests/unit/num.test.ts`):
+  - at log10 x ≈ 2.586e9 (height 18), x is stored on layer 1 (mag 2.586e9), and the smallest
+    relative change that registers is about 5.5e-7 (x.mul(1 + 5e-7) is x; x.mul(1 + 6e-7) is
+    not);
+  - `Decimal.pow(2, 1280)` < `Decimal.pow(2, 1024)·Decimal.pow(2, 256)` (one ulp of mag);
+    `Decimal.pow(2, e)` is one ulp below the correctly rounded e·log10 2 at e = 1280 and 65536,
+    and `Decimal.pow(2, 10)` is 1024.0000000000002;
+  - `Decimal.pow(10, e)` is inexact for large e (mag 2586000000.000001 at e = 2.586e9);
+  - the smallest relative `mul` change is about 6.5e-14 at 2^1024 and 4.2e-12 at 2^65536;
+  - tetrate(10, slog x) can come out below x (mag 999999.9999999919 for x = 10^10^10^1e6).
 
 ---
 
@@ -2484,6 +2577,54 @@ count comes from the knob and is shown with `power.ms.count`.
 ---
 
 ## 25. Changelog
+
+**v1.2 (M1):** corrections found while implementing the number core and the notation. No
+frozen constant or stored format changed, so no migration is needed.
+- **Resolution at height 18 (§4.1, Appendix B):** the value is stored on layer 1 (mag
+  2.586e9), not layer 2, and the smallest relative change that registers is about 5.5e-7, not
+  3e-5. `x.add(x·1e-7)` is still a no-op, so the "no lost growth" rule of §5.5 stays.
+- **Thresholds in log2 space (§4.1, §7, §8.2, §10.1):** every `floorGain` threshold is
+  computed as `pow2(base + d·log2(n/μ))`, because in 2.1.3 `Decimal.pow(2, 1280)` is one ulp
+  below `Decimal.pow(2, 1024)·Decimal.pow(2, 256)`. The formulas are unchanged.
+- **Exact powers (§4.1, Appendix B):** `pow2` and `pow10` build large results from components
+  (mag = e·log10 2, the correctly rounded value, or mag = e) and give exact doubles for small
+  integer exponents; the library's `Decimal.pow` is one ulp low at 2^1280 and 2^65536, gives
+  1024.0000000000002 for 2^10 and is inexact for 10^2.586e9. `CAP` and `TOWER1` are
+  snapshot-tested from M1.
+- **Safe-log API (§4.1):** `log10Pos`/`log10Floor1` return doubles that saturate at
+  ±`Number.MAX_VALUE`; invalid input gives `null` or 0. `log2Pos`, `slog10` and `tetrate10`
+  join the exports. The op counter is an opt-in `installOpCounter()` that the app bundle
+  tree-shakes.
+- **Notation (§4.2):** the recursion threshold is the true exponent ⌊log10 v⌋ ≥ 1e6 after
+  rounding, for every notation, so the Engineering width fixture is `999.99e999,996` (the
+  former `999.99e999,999` needs exponent 1,000,001); widths are bucketed by the displayed
+  value; `9.995e5 → 1.00e6` holds at integer threshold 1e3 (at the default it shows
+  `999,500`); an output has at most 3 `e`s and the `10↑↑h` height rounds up (tolerance 1e-9);
+  non-integers in region 1000…threshold show ⌊v⌋; small non-integers use precision + 1
+  significant digits with trailing zeros; the spoken form always uses the Scientific reading,
+  "ten to the" for stacks and U+2212 for negative exponents.
+- **Tests and tooling:** the audio ban covers `getChannelData` outright and the other
+  synthesis APIs (§2); engine purity also bans the other environment globals (§2); tsconfig
+  also sets `verbatimModuleSyntax` and `noEmit` (§21.6); `ci.yml` runs the de_DE format
+  tests from M1 instead of M9 (§23).
+- **M1 review fixes:**
+  - `floorGain` returns a `Num`, applies the ±1 correction only below 2^52, takes `Num`
+    candidates, and saturates an overflowed `number` candidate instead of paying 1 (§4.1).
+  - `pow2`'s mag is `e·log10 2` correctly rounded for every exponent (a double-double product);
+    it was one ulp off for about 6% of integers, 1023 and 65535 among them (§4.1).
+  - `subClamp` returns NaN for invalid input instead of 0; `decodeNum` accepts only canonical
+    codes and runs in constant time; `isValidNum`/`isFiniteNum` no longer narrow a `Num` to
+    `never` (§4.1).
+  - The formatter's dev assertion is the `onInvalid` option, bound once by
+    `createFormatter(tables, { onInvalid })`; Engineering stacks an Engineering exponent (§4.2).
+  - The arch scans also catch `.ln()`/`.log(b)`/`.absLog10()` and bracketed or optional log
+    calls (while `Math` logs of doubles are allowed), `self`, `indexedDB`, `queueMicrotask`
+    and other globals, `Math` aliases, `import.meta`, JavaScript-built WAVs, and code hidden
+    behind regex literals (the tokenizer fails closed); `tsconfig.engine.json` typechecks the
+    engine without DOM or Node types; the MIT notices of Preact and break_eternity.js ship in
+    `public/LICENSES/` from M1 (§2, §16.5, §21.6).
+  - The bench contract separates the count self-check (`expectedCount`) from the reported unit
+    (`units`, `unit`) and the count budget (`maxCountPerUnit`) (§4.1, §22.12).
 
 **v1.1 (M0 review):** fixes from the adversarial review of v1.0, before any game code.
 - **Pacing:** the idle first-reset band is ≤ 120 min (the M2 constants give 90.4 min with

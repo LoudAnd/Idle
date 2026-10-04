@@ -5,3 +5,5 @@ public/assets
 src/data/generated
 package-lock.json
 *.md
+# A planted fixture that is deliberately not valid TypeScript (an unterminated comment).
+tests/arch/fixtures/tokenizer/unterminated.ts
