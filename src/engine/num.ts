@@ -298,6 +298,11 @@ export function subClamp(x: Num, cost: Num): Num {
 // Validity and the save codec
 // ---------------------------------------------------------------------------------------------
 
+/** True for any `Num` (valid or not): a type guard for walking unknown trees (§21.8). */
+export function isNum(x: unknown): x is Num {
+  return x instanceof Decimal;
+}
+
 /**
  * A `Num` whose sign, layer and mag are all finite (it may be negative). Called with a `Num` it is
  * a plain check (the argument keeps its type in both branches); called with `unknown` it is also

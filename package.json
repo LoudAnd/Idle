@@ -16,6 +16,7 @@
     "check": "npm run typecheck && npm run test && npm run format:check",
     "assets": "node scripts/assets/build-assets.mjs",
     "playtest": "node scripts/dev/playtest.mjs",
+    "sim": "node scripts/sim/run.mjs",
     "bench": "node scripts/bench/run.mjs",
     "ci": "node scripts/ci/ci.mjs"
   },
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",
+    "@testing-library/preact": "^3.2.4",
     "@types/node": "^26.6.4",
     "fast-check": "^4.10.2",
     "jsdom": "^29.1.1",

@@ -136,7 +136,8 @@ Notes: deviations are recorded in GDD v1.2 (§25). `9.995e5 → 1.00e6` holds at
 1e3 (the default 1e6 shows `999,500`). The Engineering width fixture is `999.99e999,996`,
 because `999.99e999,999` has true exponent 1,000,001 and stacks. Height 18 is stored on layer 1
 (resolution about 5.5e-7), not layer 2. The CI `bench` job comes with M9 (GDD §23);
-`npm run bench -- --guard 3` already applies the ×3 guard.
+`npm run bench -- --guard 3` already applies the ×3 guard. Commit `bd0bf9e`, committed and pushed
+to finish M1.
 
 **Goal:** Pin the big-number library behind one wrapper with safe helpers, and implement every
 notation. Add the architecture tests that keep the engine pure and enforce the asset rule from
@@ -221,7 +222,7 @@ the first line of game code, and start CI.
       check and build locally.
 - [x] `playwright@1.56.1` is a devDependency; `npm install` downloads no browsers locally, and
       `npm run playtest` still runs with the preinstalled chromium-1194.
-- [ ] `npm run check` and `npm run build` pass. The scaffold page still builds. M0's last box is
+- [x] `npm run check` and `npm run build` pass. The scaffold page still builds. M0's last box is
       ticked with the docs commit's sha. Committed and pushed.
 
 **Out of scope:** game state, UI beyond the scaffold.
@@ -230,7 +231,13 @@ the first line of game code, and start CI.
 
 ## M2 — Generator engine and first playable screen
 
-Status: planned
+Status: done
+
+Notes: deviations are recorded in GDD v1.3 (§25). A purchase produces during its own tick, so
+the jsdom "x = 0 after Buy" is checked on the committed state while the header preview already
+shows 0.100. The bot uses the `sim2.py` greedy rule; seeds vary only a 0–2 s reaction delay.
+Seeds 1–3: G5 at 5.22–5.23 min, G8 at 10.70–10.78 min, x ≥ 2^128 at 11.87–11.92 min (active)
+and 90.37–90.50 min (idle); `docs/balance/M2.md`.
 
 **Goal:** Make the Sum layer work end to end: eight generators, costs, buy-max, the global
 multiplier, the exact integrator with lazy online integration, the action queue, error
@@ -261,29 +268,29 @@ early pacing.
 
 **Acceptance criteria:**
 
-- [ ] Costs: cost(G1, 0) = 10; cost(G3, 10) = 1e9 exactly; cost(G8, 0) = 1e29. Global level L
+- [x] Costs: cost(G1, 0) = 10; cost(G3, 10) = 1e9 exactly; cost(G8, 0) = 1e29. Global level L
       costs 10^(2+L) and gives ×1.15^L.
-- [ ] jsdom: in a new game, clicking Buy on G1 leaves x = 0, b1 = 1 and A1 = 1; one second
+- [x] jsdom: in a new game, clicking Buy on G1 leaves x = 0, b1 = 1 and A1 = 1; one second
       later x > 0 and no value is NaN.
-- [ ] Buy-max equals repeated single buys for 200 random states (fast-check), except that n may
+- [x] Buy-max equals repeated single buys for 200 random states (fast-check), except that n may
       differ by 1 when the total cost is within 1e-12 relative of x. x is never negative.
-- [ ] Until 10 buys up to the next multiple of 10, or as many of those as are affordable.
-- [ ] With event-constant multipliers (8 tiers, random), one 3600 s integrate step matches
+- [x] Until 10 buys up to the next multiple of 10, or as many of those as are affordable.
+- [x] With event-constant multipliers (8 tiers, random), one 3600 s integrate step matches
       3,600 steps of 1 s within 1e-9 relative and 72,000 steps of 50 ms within 1e-6 relative,
       on x and every A_k (explicit test timeout).
-- [ ] Lazy integration: 20 ticks without actions equal one 1 s integrate exactly; an action
+- [x] Lazy integration: 20 ticks without actions equal one 1 s integrate exactly; an action
       flushes the pending time before it applies.
-- [ ] The default step multiplier is 2^min(⌊b/10⌋, 34), computed in code.
-- [ ] Replaying the same action log twice gives identical serialized state.
-- [ ] A test-only effect that throws pauses the loop and opens the recovery panel; so does a
+- [x] The default step multiplier is 2^min(⌊b/10⌋, 34), computed in code.
+- [x] Replaying the same action log twice gives identical serialized state.
+- [x] A test-only effect that throws pauses the loop and opens the recovery panel; so does a
       thrown error in `window.onerror` and an unhandled rejection; a render error in one tab
       replaces only that tab.
-- [ ] Bot, seeds 1–3, in vitest with an explicit timeout and no timing assertion: active G5 at
+- [x] Bot, seeds 1–3, in vitest with an explicit timeout and no timing assertion: active G5 at
       4–7 min, G8 at 9–14 min, x ≥ 2^128 at 10–16 min; idle (10 s every 15 min) x ≥ 2^128
       within 120 min.
-- [ ] `npm run sim -- --profile active --minutes 30` prints an event timeline into
+- [x] `npm run sim -- --profile active --minutes 30` prints an event timeline into
       `sim-output/` (gitignored).
-- [ ] Playtest of `dist/`: 8 rows render, x grows over 5 s, 0 console errors.
+- [x] Playtest of `dist/`: 8 rows render, x grows over 5 s, 0 console errors.
 - [ ] `npm run check` and `npm run build` pass; the game is playable. Committed and pushed.
 
 **Out of scope:** styling, saves, Product, discovery.
@@ -338,7 +345,7 @@ breakdown tooltips, time-to-afford) that every later feature plugs into.
       sentence, a JSX text literal, a string-literal `aria-label`, a literal `label:` in
       `src/engine/content`, and a letter literal in `format.ts`. A template with a decimal
       (`ρ_k ×(1 − 0.03c)`) passes.
-- [ ] The templates test passes for every content id that exists so far, and fails on a planted
+- [ ] The templates test passes for every content id with a `templateId` that exists so far, and fails on a planted
       mismatch.
 - [ ] The glyph test passes on `strings.ts` and fails on a planted character outside the
       shipped subsets and the fallback allowlist.

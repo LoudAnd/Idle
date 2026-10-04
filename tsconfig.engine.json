@@ -4,6 +4,6 @@
     "lib": ["ES2023"],
     "types": []
   },
-  "include": ["src/engine"],
+  "include": ["src/engine", "src/sim"],
   "exclude": []
 }

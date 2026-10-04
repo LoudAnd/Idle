@@ -1,0 +1,109 @@
+/*
+ * The Sum tab's minimal layout (M2; M3's theme and generator row replace it). Layout only, no
+ * colours. Column widths are fixed fractions of the table, never of the content, so buttons
+ * do not move sideways as numbers grow (GDD §21.4); below 640 px each row becomes a 2-line card
+ * (GDD §17.6), so nothing scrolls sideways at 375 px.
+ */
+.sum-tab {
+  max-width: 64rem;
+}
+
+.sum-tab table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.sum-tab .c-tier {
+  width: 15%;
+}
+.sum-tab .c-amount {
+  width: 21%;
+}
+.sum-tab .c-mult {
+  width: 14%;
+}
+.sum-tab .c-one {
+  width: 18%;
+}
+.sum-tab .c-until {
+  width: 20%;
+}
+.sum-tab .c-max {
+  width: 12%;
+}
+
+.sum-tab th,
+.sum-tab td {
+  padding: 0.25rem 0.375rem;
+  text-align: start;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.sum-tab thead th {
+  font-weight: normal;
+  font-size: 0.875rem;
+}
+
+.sum-tab th[scope='row'],
+.sum-tab .num,
+.sum-tab button .label,
+.sum-tab button .cost {
+  white-space: nowrap;
+}
+
+.sum-tab .num {
+  font-variant-numeric: tabular-nums;
+}
+
+.sum-tab td button {
+  width: 100%;
+  min-height: 2.75rem;
+  touch-action: manipulation;
+}
+
+@media (max-width: 640px) {
+  .sum-tab table,
+  .sum-tab thead,
+  .sum-tab tbody {
+    display: block;
+  }
+
+  .sum-tab colgroup {
+    display: none;
+  }
+
+  /* Line 1: header, amount, multiplier; line 2: the three buy controls. */
+  .sum-tab tr {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 0.25rem;
+    padding: 0.375rem 0;
+  }
+
+  .sum-tab tr > * {
+    padding: 0;
+  }
+
+  .sum-tab tr > :nth-child(1) {
+    grid-column: span 4;
+  }
+  .sum-tab tr > :nth-child(2) {
+    grid-column: span 5;
+  }
+  .sum-tab tr > :nth-child(3) {
+    grid-column: span 3;
+  }
+  .sum-tab tr > :nth-child(n + 4) {
+    grid-column: span 4;
+  }
+  .sum-tab thead tr > :nth-child(4) {
+    grid-column: span 12;
+  }
+
+  .sum-tab button .label,
+  .sum-tab button .cost {
+    display: inline-block;
+  }
+}

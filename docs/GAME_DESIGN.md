@@ -109,11 +109,12 @@ says where: `check` is `npm run check` (local and CI, no source clones), `pipeli
 | Test                               | Runs     | Guards                                                                                                        |
 | ---------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
 | `tests/arch/strings.test.ts`       | check    | `strings.ts` entries ≤ 32 chars and no sentence (`/[a-z]{3,}\s[a-z]{3,}.*[.!?](\s\|$)/i`; the trailing `(\s\|$)` lets decimals such as `0.03c` through, and a planted fixture proves it). In `src/ui/**/*.tsx` outside `strings.ts`/`legal.ts`: no JSX text literal with ≥ 2 letters, and no string-literal JSX attribute with ≥ 2 letters (`aria-label`, `title`, `placeholder`, `alt`, `label`). In `src/engine/content/**`: every `label:` is a `strings.ts` key. `format.ts` contains no letter-only string literals of 2+ letters except via its table parameter |
-| `tests/arch/templates.test.ts`     | check    | Every content id has exactly the Appendix C template in `strings.ts`, and every Appendix C row has a content id |
+| `tests/arch/templates.test.ts`     | check    | Every content id that has a `templateId` (upgrades, milestones, challenge rules, rewards, achievements; §21.3) has exactly the Appendix C template in `strings.ts`, and every Appendix C row has a content id. Effects without one (the Sum base factors) are checked by the string lint's `label:` rule |
 | `tests/arch/glyphs.test.ts`        | check    | Every code point in `strings.ts` is in the shipped font subsets (§16.5) or in the fallback allowlist           |
 | `tests/arch/audio.test.ts`         | check    | No `createOscillator`, `createBuffer`, `new AudioBuffer`, `getChannelData` (banned outright, not only its writes) or `copyToChannel` in `src/`, nor the other synthesis APIs (`createPeriodicWave`, `createConstantSource`, `createScriptProcessor`, `audioWorklet`, `AudioWorkletNode`, `OscillatorNode`, `OfflineAudioContext`); strings are scanned too, so `ctx['createOscillator']` is caught. Also no WAV built in JavaScript and played through allowed playback (the jsfxr/riffwave route): no `data:audio` URI, no `'RIFF'`/`'WAVE'`/`'fmt '` header literal or constant, no audio MIME literal outside `canPlayType`, and no typed arrays, ArrayBuffers, DataViews or object URLs in a file that plays audio. `public/` holds no scripts and `index.html` no inline script, so every shipped script is under `src/` |
-| `tests/arch/engine-purity.test.ts` | check    | `src/engine` uses no `window`, `document`, `Date`, `performance`, `Math.random` or UI/platform imports, nor the other environment globals (`globalThis`, `self`, `navigator`, `location`, storage including `indexedDB`, timers including `queueMicrotask`/`setImmediate`, `requestAnimationFrame`, `fetch`, workers and channels, `process`, `Buffer`, `crypto`, `Intl`, `eval`, `toLocale*String`), no `Math` other than as `Math.<name>` (so `Math['random']` and destructuring are caught), no `import.meta` and no `Function` constructor; relative imports stay in `src/engine` and end in `.ts`; the only bare import is `break_eternity.js`, from `num.ts`. `npm run typecheck` also checks `src/engine` with `tsconfig.engine.json` (lib ES2023, no DOM or Node types), so a missed global is a compile error |
+| `tests/arch/engine-purity.test.ts` | check    | `src/engine` and `src/sim` use no `window`, `document`, `Date`, `performance`, `Math.random` or UI/platform imports, nor the other environment globals (`globalThis`, `self`, `navigator`, `location`, storage including `indexedDB`, timers including `queueMicrotask`/`setImmediate`, `requestAnimationFrame`, `fetch`, workers and channels, `process`, `Buffer`, `crypto`, `Intl`, `eval`, `toLocale*String`), no `Math` other than as `Math.<name>` (so `Math['random']` and destructuring are caught), no `import.meta` and no `Function` constructor; relative imports stay in `src/engine` (`src/sim` may also import `src/engine`) and end in `.ts`; the only bare import is `break_eternity.js`, from `num.ts`. `npm run typecheck` also checks `src/engine` and `src/sim` with `tsconfig.engine.json` (lib ES2023, no DOM or Node types), so a missed global is a compile error |
 | `tests/arch/num.test.ts`           | check    | Only `src/engine/num.ts` imports `break_eternity.js` (static, type-only, dynamic or `require`, including subpaths); no raw log method on a `Num` outside `num.ts` (`.log10()`, `.log2()`, `.ln()`, `.log(b)`, `.absLog10()`, `.pLog10()`, `.logarithm(b)`, also via `?.` or a bracketed name; `Math` logs of doubles are allowed); nothing in `src/` calls the bench-only `installOpCounter` |
+| `tests/arch/test-hooks.test.ts`    | check    | Nothing in `src/` except `src/engine/effects.ts` references the test-only effect hook `installTestEffect` (§21.8), so production code cannot inject an effect and the bundle tree-shakes it |
 | `tests/arch/licenses.test.ts`      | check    | Every runtime dependency is MIT and its `LICENSE` ships verbatim as `public/LICENSES/MIT-<name>.txt` (Preact and break_eternity.js from M1) |
 | `tests/arch/node-import.test.ts`   | check    | A plain `node` imports `src/engine/format.ts` through type stripping and prints a formatted value (§21.6) |
 | `tests/assets/manifest.test.ts`    | check    | Every file in `public/assets/**` and `src/data/generated/**` has a manifest record (source repo, commit, path, source sha256, output sha256, SPDX licence, author, transforms, `verified: true`), and every output's sha256 matches its record |
@@ -390,7 +391,9 @@ cover the digits, `×`, `·`, `−`, `↑`, `↓` and Σ Δ Π ε β λ ρ δ μ
 
 ### 5.3 Global multiplier (frozen)
 
-- Level L costs 10^(2+L) and multiplies every generator by 1.15^L.
+- Level L costs 10^(2+L) and multiplies every generator by 1.15^L. L counts from 0: the
+  purchase made at level L costs 10^(2+L), so the first level costs 100, and owning L levels
+  gives ×1.15^L (the prototypes' rule).
 - The base becomes 1.175 with a Product upgrade, plus 0.005·c from Challenge 6 (§9).
 
 ### 5.4 Buying
@@ -405,11 +408,21 @@ cover the digits, `×`, `·`, `−`, `↑`, `↓` and Σ Δ Π ε β λ ρ δ μ
 - **Hold caps** (§6.6) limit every bulk buy and every autobuyer.
 - **Cost of n purchases** is a closed-form geometric sum below 10^308.25 and exact-plus-bound
   above (§8.8).
+- **Exact exponents.** Cost exponents are computed in integer tenths,
+  e(n) = (10·λ_k + (k+2)·n)/10 (and (20 + 10·L)/10 for global levels), so every integer exponent
+  is exact: cost(G3, 10) is exactly 1e9. The naive double λ + ρ·n differs for 3,479 of the
+  16,000 pairs with n < 2,000. A buy that purchases nothing returns the state unchanged.
 - **Buy-max** finds n with the closed form (binary search on n), then checks the last purchase
   with the exact iterated cost: if the remaining x after n − 1 purchases cannot pay purchase n,
   n is reduced by 1. Every purchase uses `subClamp`, so x is never negative. In floating point,
   buy-max may differ from repeated single buys by 1 purchase only when the total cost is within
   1e-12 relative of x; it never overspends.
+  - **Boundary zone.** The closed form's rounding (a few 1e-14 relative at layer 1) can put n one
+    above what single buys pay for. So when the closed-form total of n purchases is within
+    1e-12 relative below x, or that of n + 1 within 1e-12 above it, buy-max replays the
+    purchases one at a time with their exact costs (at most n + 1 of them; n ≤ 1,024 below the
+    cap). It therefore never buys more than repeated single buys would, which is what "never
+    overspends" means; it may buy fewer only past the replay limit of 4,096.
 
 ### 5.5 Exact integration
 
@@ -448,8 +461,16 @@ x(Δ)   = x + Σ_j A_j · (Π_{i≤j} m_i) · Δ^j/j!
   time without committing it.
 - **No lost growth.** If a flush would leave x unchanged while the exact increment is positive
   (sub-resolution growth at high layers, §4.1), the pending time keeps accumulating until x
-  changes, up to 60 s. A test at a height-18 fixture checks that 1 h of online ticks and 1 h of
-  `advance()` agree within 0.5% of log10 x.
+  changes, up to 60 s. Deferral applies only to the periodic (1 s) flushes, never to event
+  flushes, which always commit; it compares x before the clamp and is skipped at the cap. While
+  it defers, online steps may be up to 60 s long (the exception to §21.3's "at most 1 s"), which
+  only happens while the growth is below resolution anyway. A test at a height-18 fixture
+  checks that 1 h of online ticks and 1 h of `advance()` agree within 0.5% of log10 x.
+- **Only a change is an event.** An action that changes nothing (an unaffordable buy, as an
+  autobuyer or a held hotkey sends every tick) does not flush, so the pending time keeps
+  accumulating. A real purchase does flush and commits the pending time even when its growth is
+  below resolution; at those heights that loses at most the growth since the last commit, once
+  per purchase. M11 (autobuyers every tick) and M17 (post-lift heights) must keep both rules.
 - **Clamp:** before the lift, x is clamped to 2^1024 after every step.
 
 **Prototype check** (greedy bot, these exact numbers; `docs/prototypes/sim4.py`, which runs
@@ -1358,7 +1379,7 @@ real bot will differ, and only the target is asserted.
 
 | Event                                    | Profile | Target                                                    | Prototype                         | Blocks |
 | ---------------------------------------- | ------- | --------------------------------------------------------- | --------------------------------- | ------ |
-| G5 / G8                                  | active  | 4–7 min / 9–14 min                                        | 5.3 / 10.9 min                    | M2     |
+| G5 / G8 (first purchase)                 | active  | 4–7 min / 9–14 min                                        | 5.3 / 10.9 min                    | M2     |
 | x ≥ 2^128 first reached                  | active  | 10–16 min                                                 | 12.1 min                          | M2     |
 | x ≥ 2^128 first reached                  | idle    | ≤ 120 min                                                 | 90.4 min                          | M2     |
 | First Product reset                      | active  | 10–16 min                                                 | 14.2 min (reset near peak P/min)  | M5     |
@@ -1392,7 +1413,8 @@ never block a milestone.
 | v1 completion                         | regular | Day 45–90                                 | M23           |
 
 **Meaningful events:**
-- a tier unlocked
+- a tier unlocked (its first purchase, the prototypes' `G<k>` event; not the half-cost reveal of
+  §17.4)
 - a reset of any layer
 - an upgrade or milestone
 - a discovery or completion
@@ -2046,6 +2068,14 @@ fixtures, M6a for the manifest, M6b for the height report), so
 - **Fixed timestep:** dt = 50 ms (20 TPS). `tick(state, actions)` applies the actions and
   advances 50 ms; `advance(state, seconds, schedule?)` covers longer spans. Both are pure, both
   call `integrate(state, Δ)`, and nothing else changes game state.
+  - Order inside `tick`: if there are actions, flush the pending time (an event flush, §5.5) and
+    apply them; then add 50 ms to the pending time and flush once 1 s is pending. A purchase
+    therefore produces during the tick it was made in. If no action changes the state, the
+    flush is discarded (§5.5: only a change is an event).
+  - `step(state, actions, seconds)` = flush, apply, then `integrate(seconds)` exactly: the bot's
+    1 s exact steps (§22.6), from M2 on (before `advance()` exists).
+  - `addTime(state, ms)` adds time that does not fit into whole ticks to the pending time
+    (§21.4).
 - **Actions:** the UI, hotkeys, autobuyers and the bot all send serializable actions, such as
   `{type: 'buy', tier: 3, mode: 'max'}`. They are applied at the next tick boundary.
 - **Replay:** action logs can be replayed. Two runs with the same actions produce byte-identical
@@ -2056,14 +2086,30 @@ fixtures, M6a for the manifest, M6b for the height report), so
 ### 21.3 Effects pipeline
 
 - Content declares effects as data: `{id, target, kind: 'mul' | 'pow' | 'add', class:
-  'event' | 'state', value(state), templateId}`. `templateId` points at the Appendix C
-  string.
+  'event' | 'state', value(state, tier), label, templateId?}`. `label` is the `strings.ts` key of
+  the effect's breakdown row. `templateId` points at the Appendix C string and is present only on
+  upgrades, milestones, challenge rules, rewards and achievements: the Sum base factors (β, g^L,
+  slot_k) are not Appendix C content and carry a `label` only, so the templates test (M3) covers
+  content that has a `templateId`.
+- `labelParams(state, tier)` fills the label's `{placeholders}` from the same state as `value`
+  (for slot_k, `{a} a({i})`: the curve's A-number and the term used, `A000079 a(5)`), and the
+  evaluated factor carries them as `params`. A breakdown row therefore needs nothing outside the
+  table, and from M14 the A-number follows the equipped sequence.
+- Every event that changes what event-constant effects read goes through `withSum` (or a
+  later layer's equivalent), which marks the table dirty; a test replays random action logs and
+  checks after every tick and action that a cached table equals a fresh rebuild.
+- **Fold order**, per tier: m = ((1 + Σ add) · Π mul) ^ (Π pow), every factor taken in content
+  order, so the result is deterministic.
 - `effects.ts` folds them into a cached multiplier table.
   - **Event-constant** effects (`class: 'event'`) are rebuilt when a dirty flag is set
     (purchase, reset, unlock, upgrade, loadout).
   - **State-dependent** effects (`class: 'state'`: the 610-P factor, Pb while passive P is on,
     and ε; §5.5) are re-evaluated at the start of every integration step and held for that
-    step. That is the only refresh rule; online steps are at most 1 s apart.
+    step. That is the only refresh rule; online steps are at most 1 s apart (except while
+    sub-resolution growth is deferred, §5.5).
+  - Tables record the content version they were built for. The test-only hook
+    `installTestEffect` (§21.8) adds an effect and bumps the version, so cached tables are
+    rebuilt.
 - Breakdown tooltips read the same table, so what is shown is what is computed.
 
 ### 21.4 UI loop
@@ -2072,10 +2118,18 @@ fixtures, M6a for the manifest, M6b for the height report), so
   frame. Any remaining time is added to the pending integration time (§5.5) and integrated
   exactly by `integrate()`, so a slow frame never drops time. Gaps longer than 60 s (a suspended
   laptop, a hidden tab) go through `advance()`.
+  - "Remaining time" is the time beyond 40 ticks; it goes to the pending time (`addTime`) and is
+    integrated lazily and exactly. The fraction below 50 ms stays in the accumulator.
+  - Until `advance()` exists (M4), a gap is one forced exact `integrate` of the whole gap. That
+    is exact in M2, which has no state-dependent effects.
+  - The view is derived from the state inside the safe wrapper (§21.8) at most at the UI fps
+    (30 by default; the setting comes with M3), and the loop keeps the last good view.
 - **Hidden tabs** catch up through the same path when shown again.
 - **Errors:** every call into the engine goes through `safeTick` (§21.8).
 - **Rendering:** Preact re-renders at most at the UI fps setting, from a version counter.
-  Formatted number strings are memoized per row.
+  Formatted number strings are memoized per row: each rendered number formats again only when
+  its value changes (compared by sign, layer and mag). The Sum tab's columns have fixed
+  widths, so buttons never move sideways as numbers grow.
 - **Threading:** the engine stays on the main thread. Its API is free of the environment, so it
   could move to a Worker if profiling ever demands it.
 
@@ -2116,8 +2170,10 @@ fixtures, M6a for the manifest, M6b for the height report), so
   run time with "does not provide an export named 'T'", so type-only imports must say
   `import type`) and `noEmit` (which `allowImportingTsExtensions` requires).
   `tests/arch/node-import.test.ts` checks the whole path with a plain `node`.
-- `tsconfig.engine.json` typechecks `src/engine` (and `src/sim` once it exists, M2) with lib
-  ES2023 and no DOM, Node or Vite types, as part of `npm run typecheck`. Any environment access
+- `tsconfig.engine.json` typechecks `src/engine` and, from M2, `src/sim` with lib
+  ES2023 and no DOM, Node or Vite types, as part of `npm run typecheck`. The engine-purity,
+  import and `.ts`-extension scans (§2) cover `src/sim` too, since `Math.random` is not a type
+  error; `src/sim` may import `src/engine`, never the reverse. Any environment access
   (`self`, `Buffer`, `location`, `import.meta.env`, `console`, timers) is then a compile error,
   not only a lint finding.
 
@@ -2142,7 +2198,15 @@ Measured by `npm run bench` (§22.12), never asserted in `npm run check`.
   and the recovery panel opens.
 - **Recovery panel** (labels from `strings.ts`): Export current (the in-memory state, marked
   unverified), Export last good (the last saved blob, byte for byte), Reload.
-- **Global handlers:** `window.onerror` and `unhandledrejection` open the same panel.
+- **Global handlers:** `window.onerror` and `unhandledrejection` open the same panel. They are
+  installed with `addEventListener('error' | 'unhandledrejection')`, so other listeners keep
+  working.
+- **Pause:** a fault stops the loop for good: no further frames, enqueued actions are ignored,
+  and the last good state and view are kept (for M4's Export current). The view is checked too:
+  a NaN in a derived value is an invariant fault, so the UI never renders one. The check walks
+  the whole view (`checkValues`: every `Num` and number), so new view fields are covered
+  without a list. The paused screen disables every game control and moves the focus to the
+  panel's Reload, so the panel is the only thing the player can act on.
 - **Never persist a bad state:** the invariant check before every save (§20.1) refuses an
   invalid state and keeps the last good save.
 - **Test:** a test-only content hook injects an effect that throws, and another that returns
@@ -2218,17 +2282,22 @@ took.
 
      | Profile   | Behaviour                                                                                                                                                                                                 |
      | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-     | `active`  | Acts every 1 s. Greedy by return on cost. Resets near peak gain per minute. Pursues the nearest affordable undiscovered window with hold caps; it may read the window index, modelling a player who uses hints and outside lookup. |
+     | `active`  | Acts every 1 s. Greedy (the `sim2.py` rule that the §5.5 and §15 reference numbers come from: buy the highest affordable tier, searching G8 down to G1, and a global level instead when it costs less than 3× that tier's purchase or no tier is affordable; repeat until nothing is affordable). Resets near peak gain per minute. Pursues the nearest affordable undiscovered window with hold caps; it may read the window index, modelling a player who uses hints and outside lookup. |
      | `idle`    | Every 15 min, runs the active policy for 10 s. Between check-ins only owned autobuyers act.                                                                                                              |
      | `regular` | Per day: two 45-min active sessions, six 2-min checks, the rest offline through `advance()`.                                                                                                              |
 
    - **Mechanics:**
      - drives the engine only through actions
      - uses 1 s exact steps while active (lazy integration, §5.5)
-     - runs with seeds 1–5, which vary tie-breaks and reaction delays
+     - runs with seeds 1–5, which vary reaction delays (and tie-breaks once a policy has exact
+       ties): after a round with purchases the bot waits a seeded 0–2 extra seconds before it
+       acts again, still on the 1 s grid. The M2 policy has no exact ties: a global level costs
+       10^(2+L), and 3× a tier price 10^(e/10) is never a power of ten
+     - "G<k> at t" is the time of the tier's first purchase
    - **Outputs:** `sim-output/report.{json,md}` (gitignored), with an event timeline and
-     metrics: the longest gap between meaningful events, dead-zone minutes, and the fixpoint
-     slope. Milestones commit the parts they need as `docs/balance/M<n>.md`.
+     metrics: the longest gap between meaningful events (counted from the start of the run and
+     up to its end, so a stall after the last event is not hidden; the trailing stretch is also
+     reported on its own), dead-zone minutes, and the fixpoint slope. Milestones commit the parts they need as `docs/balance/M<n>.md`.
    - **Gating:**
      - `balance/targets.json` holds the bands from §15, each with the milestone it blocks.
        Every blocking band must hold for seeds 1–3 (nightly: 1–5).
@@ -2577,6 +2646,68 @@ count comes from the knob and is shown with `power.ms.count`.
 ---
 
 ## 25. Changelog
+
+**v1.3 (M2):** clarifications found while implementing the Sum layer, the loop and the bot. No
+formula, frozen constant or stored format changed (there is no save format yet), so no
+migration is needed.
+- **"G5 / G8 at t" (§15, §22.6):** the time of the tier's first purchase, the prototypes' `G<k>`
+  event and §15's "a tier unlocked", not the half-cost reveal of §17.4.
+- **Bot policy (§22.6):** the `active` profile implements the `sim2.py` greedy rule the §5.5 and
+  §15 reference numbers come from (highest affordable tier first; a global level when it costs
+  less than 3× that tier's purchase or no tier is affordable), instead of an unspecified
+  "return on cost" rule. Measured with seeds 1–5: G5 at 5.18–5.23 min, G8 at 10.68–10.80 min,
+  x ≥ 2^128 at 11.82–11.93 min (active) and 90.37–90.50 min (idle); `docs/balance/M2.md`.
+- **Seeds (§22.6):** seeds vary a 0–2 s reaction delay after each round with purchases (the bot
+  still acts on the 1 s grid). The M2 policy has no exact cost ties (10^(2+L) never equals 3×
+  a tier price), so there is no seeded tie-break yet; a later policy with real ties gets one.
+- **Tick order (§21.2):** flush, apply the actions, then add 50 ms, as §21.2's wording says. A
+  purchase produces during its own tick, so the jsdom check "x = 0 after Buy" is made on the
+  committed state while the header preview already shows 0.100.
+- **`step(state, actions, seconds)` and `addTime` (§21.2):** the bot's exact 1 s steps and the
+  loop's remainder, before M4's `advance()` exists.
+- **Loop remainder and gaps (§21.4):** time beyond 40 ticks goes to the pending time and is
+  integrated lazily and exactly; the fraction below 50 ms stays in the accumulator. Until M4,
+  a gap over 60 s is one forced exact `integrate`.
+- **Deferral scope (§5.5, §21.3):** only periodic flushes defer, event flushes always commit;
+  the check uses x before the clamp and is skipped at the cap; steps may then be up to 60 s
+  long.
+- **Global level index (§5.3):** the purchase made at level L (from 0) costs 10^(2+L), so the
+  first level costs 100; owning L levels gives ×1.15^L.
+- **Exact cost exponents (§5.4):** exponents are computed in integer tenths, so integer
+  exponents are exact (cost(G3, 10) = 1e9).
+- **`label` and `templateId` (§21.3, §2):** effects carry a `strings.ts` `label`; `templateId` is
+  optional and only on Appendix C content, which the Sum base factors are not. The §2 row of
+  `tests/arch/templates.test.ts` now says so: it covers every content id that has a
+  `templateId`.
+- **Label parameters (§21.3):** `labelParams(state, tier)` fills a label's placeholders, carried
+  on the factor as `params`; `factor.slot` is the template `{a} a({i})`, so the A-number is no
+  longer a literal in `strings.ts`.
+- **Fold order (§21.3):** m = ((1 + Σ add) · Π mul) ^ (Π pow), in content order.
+- **`src/sim` purity (§2, §21.6):** the engine-purity, import and extension scans cover
+  `src/sim`, which may import `src/engine`; a new arch test keeps the test-only
+  `installTestEffect` hook out of `src/` (§2, §21.8).
+- **Recovery (§21.8):** global handlers use `addEventListener`; a fault stops the loop for good
+  and keeps the last good state and view; a NaN in the derived view is an invariant fault,
+  found by a walk of the whole view (`checkValues`), the loop's default. The paused screen
+  disables every game control and focuses Reload.
+- **Buy-max boundary zone (§5.4):** within 1e-12 relative of a total-cost boundary, buy-max
+  replays single buys, so it never buys more than they would. The closed form alone bought one
+  more in about 4% of states planted within 2e-13 of a boundary (2.6e-14 relative over x).
+- **Only a change is an event (§5.5, §21.2):** a tick whose actions change nothing discards its
+  forced flush, so no-op actions (unaffordable buys) no longer lose sub-resolution growth.
+- **Cache coherence (§21.3):** events go through `withSum`, which marks the effect table
+  dirty; a replay property checks the cached table against a rebuild after every tick and
+  action.
+- **Longest gap (§22.6):** the report counts the stretch after the last meaningful event up to
+  the end of the run, and reports that trailing stretch on its own as well. The 30 min active
+  run reports 19.3 min (the stall after G8 at 10.7 min, which M5's Product reset fills), not the
+  2.05 min between unlocks.
+- **Sum tab (§5.2, §17.3, §17.6, §18, §21.4):** the amount cell is `{a} ({b} bought)` (§17.3);
+  column headers come from `strings.ts`, and the cost header cites λ_k = A000124(k−1) from the
+  content constant; every buy button's accessible name starts with its row header ("Generator 3
+  Max"); formatted numbers are memoized per rendered number; fixed column widths keep the
+  buttons still, and below 640 px each row is a 2-line card, so there is no horizontal scroll
+  at 375 px. The M2 playtest checks both after 12 simulated minutes on a fake clock.
 
 **v1.2 (M1):** corrections found while implementing the number core and the notation. No
 frozen constant or stored format changed, so no migration is needed.

@@ -455,13 +455,24 @@ function scanGlobals(files: readonly SourceFile[]): Violation[] {
 }
 
 /**
- * `src/engine/**`: environment access: the globals above, `Math.random`, `Math` used other than
- * as `Math.<name>` (so `Math['random']`, `const { random } = Math` and `const M = Math` are
- * caught), `import.meta` (`import.meta.env` is undefined under Node), the `Function` constructor
- * and `toLocale*String`.
+ * The pure directories (GDD §21.1): `src/engine` and `src/sim` (the bots and the fixpoint
+ * calculator, which Node runs directly). Both are typechecked by `tsconfig.engine.json`.
+ */
+export const PURE_DIRS = ['src/engine', 'src/sim'] as const;
+
+function isPure(path: string): boolean {
+  return PURE_DIRS.some((d) => inDir(path, d));
+}
+
+/**
+ * `src/engine/**` and `src/sim/**`: environment access: the globals above, `Math.random`, `Math`
+ * used other than as `Math.<name>` (so `Math['random']`, `const { random } = Math` and
+ * `const M = Math` are caught), `import.meta` (`import.meta.env` is undefined under Node), the
+ * `Function` constructor and `toLocale*String`. The sim's randomness comes from its seeded
+ * `src/sim/rng.ts`, never from `Math.random`.
  */
 export function scanEngineEnvironment(files: readonly SourceFile[]): Violation[] {
-  const engine = files.filter((f) => inDir(f.path, 'src/engine'));
+  const engine = files.filter((f) => isPure(f.path));
   const code = stripCommentsAndStrings;
   return [
     ...scanTokenizer(engine),
@@ -476,17 +487,20 @@ export function scanEngineEnvironment(files: readonly SourceFile[]): Violation[]
 
 /**
  * `src/engine/**`: relative imports stay inside src/engine; the only bare import is
- * `break_eternity.js`, and only from src/engine/num.ts.
+ * `break_eternity.js`, and only from src/engine/num.ts. `src/sim/**` may import src/engine and
+ * src/sim only, and nothing bare.
  */
 export function scanEngineImports(files: readonly SourceFile[]): Violation[] {
-  const out: Violation[] = scanTokenizer(files.filter((f) => inDir(f.path, 'src/engine')));
+  const out: Violation[] = scanTokenizer(files.filter((f) => isPure(f.path)));
   for (const f of files) {
-    if (!inDir(f.path, 'src/engine')) continue;
+    if (!isPure(f.path)) continue;
+    const allowed: readonly string[] = inDir(f.path, 'src/sim') ? PURE_DIRS : ['src/engine'];
     for (const ref of importSpecifiers(f.source)) {
       const spec = ref.specifier;
       let rule: string | null = null;
       if (isRelative(spec)) {
-        if (!inDir(resolveRelative(f.path, spec), 'src/engine')) rule = 'engine-import-outside';
+        const target = resolveRelative(f.path, spec);
+        if (!allowed.some((d) => inDir(target, d))) rule = 'engine-import-outside';
       } else if (!(spec === 'break_eternity.js' && f.path === 'src/engine/num.ts')) {
         rule = 'engine-import-bare';
       }
@@ -497,11 +511,14 @@ export function scanEngineImports(files: readonly SourceFile[]): Violation[] {
   return out;
 }
 
-/** `src/engine/**`: every relative import ends in `.ts` (Node type stripping, GDD §21.6). */
+/**
+ * `src/engine/**` and `src/sim/**`: every relative import ends in `.ts` (Node type stripping,
+ * GDD §21.6).
+ */
 export function scanEngineImportExtensions(files: readonly SourceFile[]): Violation[] {
   const out: Violation[] = [];
   for (const f of files) {
-    if (!inDir(f.path, 'src/engine')) continue;
+    if (!isPure(f.path)) continue;
     for (const ref of importSpecifiers(f.source)) {
       if (isRelative(ref.specifier) && !ref.specifier.endsWith('.ts')) {
         out.push({
@@ -607,6 +624,20 @@ export function scanOpCounter(files: readonly SourceFile[]): Violation[] {
   return [
     ...scanTokenizer(rest),
     ...scanPattern(rest, 'num-op-counter', /\binstallOpCounter\b/g, stripComments),
+  ];
+}
+
+const EFFECTS_MODULE = 'src/engine/effects.ts';
+
+/**
+ * `src/**` except effects.ts: nothing references the test-only effect hook `installTestEffect`
+ * (GDD §21.8), so production code can never inject an effect and the app bundle tree-shakes it.
+ */
+export function scanTestHooks(files: readonly SourceFile[]): Violation[] {
+  const rest = files.filter((f) => inDir(f.path, 'src') && f.path !== EFFECTS_MODULE);
+  return [
+    ...scanTokenizer(rest),
+    ...scanPattern(rest, 'test-hook', /\binstallTestEffect\b/g, stripComments),
   ];
 }
 

@@ -6,3 +6,4 @@ vendor
 coverage
 .vite
 playtest-output
+sim-output/

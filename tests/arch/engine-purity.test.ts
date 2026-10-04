@@ -87,9 +87,22 @@ describe('engine environment', () => {
     expect(vs.map((v) => v.line)).toEqual([2, 3]);
   });
 
-  it('only checks src/engine', () => {
+  it('only checks src/engine and src/sim', () => {
     const vs = scanEngineEnvironment([loadFixture('engine/window.ts', 'src/ui/x.ts')]);
     expect(vs).toEqual([]);
+  });
+
+  it('src/sim is pure too: flags sim/math-random.ts and window in src/sim', () => {
+    const random = scanEngineEnvironment([loadFixture('sim/math-random.ts', 'src/sim/x.ts')]);
+    expect(random.map((v) => v.rule)).toContain('engine-random');
+    const win = scanEngineEnvironment([loadFixture('engine/window.ts', 'src/sim/x.ts')]);
+    expect(win.map((v) => v.rule)).toContain('engine-global');
+    const ok = scanEngineEnvironment([loadFixture('sim/allowed.ts', 'src/sim/x.ts')]);
+    expect(ok, describeViolations(ok)).toEqual([]);
+  });
+
+  it('the scan sees src/sim', () => {
+    expect(src.map((f) => f.path)).toContain('src/sim/bot.ts');
   });
 
   it('sees code after regex literals that hold /*, //, a quote or a backtick (tokenizer/regex-engine.ts)', () => {
@@ -119,7 +132,7 @@ describe('engine environment', () => {
 describe('engine type environment', () => {
   // GDD §21.1, §21.6: the engine runs under plain Node and in the browser, so it is also
   // typechecked without DOM or Node types; a missing global is then a compile error.
-  it('npm run typecheck checks src/engine against tsconfig.engine.json (ES2023, no DOM, no types)', () => {
+  it('npm run typecheck checks src/engine and src/sim against tsconfig.engine.json (ES2023, no DOM, no types)', () => {
     const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
       scripts: Record<string, string>;
     };
@@ -132,6 +145,7 @@ describe('engine type environment', () => {
     };
     expect(cfg.extends).toBe('./tsconfig.json');
     expect(cfg.include).toContain('src/engine');
+    expect(cfg.include).toContain('src/sim');
     expect(cfg.compilerOptions.lib.map((l) => l.toLowerCase())).toEqual(['es2023']);
     expect(cfg.compilerOptions.types).toEqual([]);
   });
@@ -162,6 +176,18 @@ describe('engine imports', () => {
     const vs = scanEngineImports([loadFixture('engine/imports/allowed.ts', 'src/engine/sub/x.ts')]);
     expect(vs, describeViolations(vs)).toEqual([]);
   });
+
+  it('src/sim may import src/engine and src/sim only', () => {
+    const ui = scanEngineImports([loadFixture('sim/ui-import.ts', 'src/sim/x.ts')]);
+    expect(ui.map((v) => v.rule)).toEqual(['engine-import-outside']);
+    const bare = scanEngineImports([loadFixture('engine/preact-import.ts', 'src/sim/x.ts')]);
+    expect(bare.map((v) => v.rule)).toEqual(['engine-import-bare']);
+    const ok = scanEngineImports([loadFixture('sim/allowed.ts', 'src/sim/x.ts')]);
+    expect(ok, describeViolations(ok)).toEqual([]);
+    // The engine still may not import the sim.
+    const up = scanEngineImports([loadFixture('engine/sim-import.ts', AT)]);
+    expect(up.map((v) => v.rule)).toEqual(['engine-import-outside']);
+  });
 });
 
 describe('engine import extensions', () => {
@@ -183,5 +209,12 @@ describe('engine import extensions', () => {
   it('does not flag engine/imports/allowed.ts', () => {
     const fixture = loadFixture('engine/imports/allowed.ts', 'src/engine/sub/x.ts');
     expect(scanEngineImportExtensions([fixture])).toEqual([]);
+  });
+
+  it('checks src/sim as well', () => {
+    const vs = scanEngineImportExtensions([
+      loadFixture('engine/imports/no-extension.ts', 'src/sim/x.ts'),
+    ]);
+    expect(vs.map((v) => v.rule)).toEqual(['engine-import-extension']);
   });
 });
