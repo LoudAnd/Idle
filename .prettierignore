@@ -1,0 +1,7 @@
+dist
+node_modules
+vendor
+public/assets
+src/data/generated
+package-lock.json
+*.md
