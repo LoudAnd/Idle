@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { NOTATION } from '../../src/engine/format.ts';
-import { SETTINGS_KEY, createSettingsStore } from '../../src/platform/settingsStore.ts';
+import { SETTINGS_KEY, createSettingsStore } from '../../src/platform/storage.ts';
 import {
   DEFAULT_SETTINGS,
   SETTINGS_FIELDS,

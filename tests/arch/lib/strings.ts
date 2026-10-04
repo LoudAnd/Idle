@@ -247,6 +247,10 @@ export const NON_TEXT_ATTRIBUTES: ReadonlySet<string> = new Set([
   'aria-controls',
   'aria-describedby',
   'aria-hidden',
+  // A file input's accepted types (M4's Import from file: `.txt,text/plain`).
+  'accept',
+  // An input's autofill hint (M4's Hard reset field: `off`).
+  'autoComplete',
 ]);
 
 /** True for an attribute or prop name that is not text (`NON_TEXT_ATTRIBUTES` or `data-*`). */

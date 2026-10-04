@@ -21,6 +21,8 @@ export function Allowed({ n, on }: { n: number; on: boolean }) {
         <span>1/10</span>
       </p>
       <input type="number" placeholder={String(n)} />
+      <input type="file" accept=".txt,text/plain" />
+      <input type="text" autoComplete="off" spellcheck={false} />
       <Field setting="notation" data-mode="maxAll" />
       <Tabs
         items={[{ id: 'numbers', label: STRINGS['settings.numbers'] }]}

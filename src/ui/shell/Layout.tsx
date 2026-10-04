@@ -1,5 +1,6 @@
 /**
- * The shell's one DOM structure (GDD §17.6): the header, the optional tab list and `<main>`.
+ * The shell's one DOM structure (GDD §17.6): the header, the chrome banners (§20.1: storage,
+ * newer save, load fallback, another tab), the optional tab list and `<main>`.
  * CSS (`shell.css`) places the tabs as a left rail from 1024 px, a row in between and a fixed
  * bottom bar up to 640 px; nothing is duplicated per breakpoint.
  *
@@ -17,12 +18,14 @@ export const HEADER_HEIGHT_VAR = '--shell-header-h';
 
 export interface LayoutProps {
   readonly header: ComponentChildren;
+  /** The chrome banners (`Banners.tsx`), or `null` when there are none. */
+  readonly banners?: ComponentChildren | null;
   /** The tab list, or `null` while only one tab is revealed. */
   readonly tabs: ComponentChildren | null;
   readonly children?: ComponentChildren;
 }
 
-export function Layout({ header, tabs, children }: LayoutProps) {
+export function Layout({ header, banners = null, tabs, children }: LayoutProps) {
   const hasTabs = tabs !== null && tabs !== undefined && tabs !== false;
   const shell = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -44,6 +47,9 @@ export function Layout({ header, tabs, children }: LayoutProps) {
   return (
     <div class="shell" ref={shell} data-has-tabs={hasTabs ? '' : undefined}>
       {header}
+      {banners !== null && banners !== undefined && banners !== false && (
+        <div class="shell-banners">{banners}</div>
+      )}
       {hasTabs && <div class="shell-tabs">{tabs}</div>}
       <main class="shell-main">{children}</main>
     </div>

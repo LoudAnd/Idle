@@ -18,8 +18,8 @@ html {
   min-height: 100vh;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto 1fr;
-  grid-template-areas: 'header' 'tabs' 'main';
+  grid-template-rows: auto auto auto 1fr;
+  grid-template-areas: 'header' 'banners' 'tabs' 'main';
 }
 
 .shell-header {
@@ -95,6 +95,43 @@ html {
   border-color: var(--accent);
 }
 
+/* The chrome banners (§20.1): full width under the header, one per line, wrapping. */
+.shell-banners {
+  grid-area: banners;
+  min-width: 0;
+  padding: 0.5rem max(1rem, env(safe-area-inset-right)) 0 max(1rem, env(safe-area-inset-left));
+}
+
+.banners {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 72rem;
+}
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.banner > .save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.banner .export-box {
+  flex: 1 1 100%;
+}
+
 .shell-tabs {
   grid-area: tabs;
   padding: 0.5rem max(1rem, env(safe-area-inset-left));
@@ -135,8 +172,8 @@ html {
 @media (min-width: 1024px) {
   .shell[data-has-tabs] {
     grid-template-columns: 12rem minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
-    grid-template-areas: 'header header' 'tabs main';
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas: 'header header' 'banners banners' 'tabs main';
   }
 
   .shell[data-has-tabs] .shell-tabs [role='tablist'] {

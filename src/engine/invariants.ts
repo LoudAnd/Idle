@@ -1,10 +1,13 @@
 /**
  * The engine invariant (GDD §20.1). The platform checks it after every step (`safeTick`,
- * §21.8), and from M4 before every save: every `Num` passes `isValidNum` (finite and ≥ 0) and
- * every count is an integer in [0, 2^53]. M2 has no ids to check. `checkValues` is the same
- * rule for derived trees (the UI's view, §21.8), which the game loop checks by default.
+ * §21.8), and from M4 before every save (`checkSave`): every `Num` passes `isValidNum` (finite
+ * and ≥ 0), every count is an integer in [0, 2^53], and every id is known (the onboarding ids of
+ * `content/onboarding.ts`, unique per list). `checkValues` is the same rule for derived trees
+ * (the UI's view, §21.8), which the game loop checks by default.
  */
+import { ONBOARDING_KINDS, isKnownOnboardingId } from './content/onboarding.ts';
 import { isNum, isValidNum } from './num.ts';
+import type { SaveData } from './save/envelope.ts';
 import type { GameState } from './state.ts';
 import { MAX_COUNT } from './tiers.ts';
 
@@ -45,6 +48,32 @@ export function checkInvariants(s: GameState): readonly string[] {
     check(s, out);
   } catch {
     out.push('state: unreadable');
+  }
+  return out;
+}
+
+/**
+ * The problems with a save before it is written (§20.1): the state's invariant, and every
+ * onboarding id known and unique in its list. Empty when it may be saved. Never throws.
+ */
+export function checkSave(save: SaveData): readonly string[] {
+  const out = [...checkInvariants(save.game)];
+  try {
+    for (const kind of ONBOARDING_KINDS) {
+      const list: unknown = save.onboarding[kind];
+      if (!Array.isArray(list)) {
+        out.push(`onboarding.${kind}: not an array`);
+        continue;
+      }
+      const seen = new Set<unknown>();
+      list.forEach((id: unknown, i) => {
+        if (!isKnownOnboardingId(kind, id)) out.push(`onboarding.${kind}[${i}]: unknown id`);
+        else if (seen.has(id)) out.push(`onboarding.${kind}[${i}]: duplicate id`);
+        seen.add(id);
+      });
+    }
+  } catch {
+    out.push('onboarding: unreadable');
   }
   return out;
 }

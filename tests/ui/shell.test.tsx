@@ -5,7 +5,7 @@
 import { cleanup, fireEvent, screen } from '@testing-library/preact';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeState } from '../../src/engine/state.ts';
-import { SETTINGS_KEY, createSettingsStore } from '../../src/platform/settingsStore.ts';
+import { SETTINGS_KEY, createSettingsStore } from '../../src/platform/storage.ts';
 import { STRINGS } from '../../src/ui/strings.ts';
 import { fill } from '../../src/ui/tpl.ts';
 import { button, setupApp, shown, tiersShown } from './support/app.tsx';

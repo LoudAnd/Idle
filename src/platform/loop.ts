@@ -2,7 +2,13 @@
  * The UI loop (GDD §21.4). Animation frames feed an accumulator that runs at most 40 fine ticks
  * of 50 ms per frame; time beyond that is added to the pending integration time and integrated
  * exactly (§5.5), so a slow frame never drops time. A gap longer than 60 s (a suspended laptop,
- * a hidden tab) is integrated in one exact forced flush; M4 routes gaps through `advance()`.
+ * a hidden tab) goes through `advance()` (§20.2): with `onGap` the loop stops requesting frames
+ * (this is not a fault) and hands the gap to the session, which runs it in time slices behind
+ * the progress modal, then `replace`s the state and starts the loop again; without `onGap` the
+ * loop advances the gap synchronously, capped at the offline cap.
+ *
+ * `replace(s)` puts a loaded, imported, restored or reset game in place (M4): it checks the
+ * invariant, clears the queue and the accumulator, then derives and notifies.
  *
  * Every engine call goes through `safeTick` (§21.8): an exception or a failed invariant pauses
  * the loop for good. The last good state and view are kept, frames stop and enqueued actions
@@ -16,8 +22,8 @@
  */
 import type { Action } from '../engine/actions.ts';
 import { TICK_MS } from '../engine/content/sum.ts';
-import { flush } from '../engine/integrate.ts';
 import { checkInvariants, checkValues } from '../engine/invariants.ts';
+import { advance, offlineCap } from '../engine/offline.ts';
 import { newGame } from '../engine/state.ts';
 import type { GameState } from '../engine/state.ts';
 import { addTime, tick } from '../engine/tick.ts';
@@ -27,7 +33,7 @@ import type { ErrorHub } from './errors.ts';
 
 /** At most this many 50 ms ticks per frame. */
 export const MAX_TICKS_PER_FRAME = 40;
-/** A frame gap longer than this is caught up in one exact step. */
+/** A frame gap longer than this goes through `advance()` (§21.4). */
 export const GAP_MS = 60_000;
 /** The default UI fps: the view is derived at most this many times per second (GDD §19). */
 export const UI_FPS = 30;
@@ -56,10 +62,10 @@ export interface FramePlan {
  * A negative or invalid dt counts as 0. No time is dropped:
  * ticks·50 + extraMs + accMs = accMs(previous) + dt.
  */
-export function planFrame(accMs: number, dtMs: number): FramePlan {
+export function planFrame(accMs: number, dtMs: number, gapMs: number = GAP_MS): FramePlan {
   const dt = Number.isFinite(dtMs) && dtMs > 0 ? dtMs : 0;
   const acc = Number.isFinite(accMs) && accMs > 0 ? accMs : 0;
-  if (dt > GAP_MS) return { ticks: 0, extraMs: acc + dt, accMs: 0, gap: true };
+  if (dt > gapMs) return { ticks: 0, extraMs: acc + dt, accMs: 0, gap: true };
   const t = acc + dt;
   const ticks = Math.min(MAX_TICKS_PER_FRAME, Math.floor(t / TICK_MS));
   if (ticks === MAX_TICKS_PER_FRAME) {
@@ -80,6 +86,14 @@ export interface GameLoop<V> {
   subscribe(fn: () => void): () => void;
   /** Queues an action for the next tick (ignored after a fault). */
   enqueue(a: Action): void;
+  /** Drops the queued actions (a tab that yields, §20.1). */
+  clearQueue(): void;
+  /**
+   * Puts `s` in place of the current state (a loaded, imported, restored or reset game): checks
+   * the invariant, clears the queue and the accumulator, then derives and notifies. False (and
+   * nothing changes) for an invalid state or after a fault.
+   */
+  replace(s: GameState): boolean;
   /** Sets the UI fps (the view's derive rate), clamped to [10, 60]. */
   setUiFps(fps: number): void;
   /** The current UI fps. */
@@ -104,9 +118,22 @@ export interface GameLoopOptions<V> {
   readonly observe?: (s: GameState) => void;
   readonly initial?: GameState;
   readonly hub?: ErrorHub;
+  /**
+   * Takes a frame gap longer than `gapMs` (its length in ms of this clock). The loop stops
+   * requesting frames first; the session catches up and starts it again. Without it, the loop
+   * advances the gap itself, synchronously, capped at the offline cap (§20.2).
+   */
+  readonly onGap?: (ms: number) => void;
+  /** The gap threshold (default `GAP_MS`; a dev-hook speed scales it with the clock). */
+  readonly gapMs?: number;
 }
 
 const NO_PROBLEMS = (): readonly string[] => [];
+
+/** `advance()` of a gap, capped at the offline cap (§20.2). */
+function catchUp(s: GameState, ms: number): GameState {
+  return advance(s, Math.min(ms / 1000, offlineCap(s)));
+}
 
 export function createGameLoop<V>(o: GameLoopOptions<V>): GameLoop<V> {
   const hub = o.hub ?? createErrorHub();
@@ -163,16 +190,25 @@ export function createGameLoop<V>(o: GameLoopOptions<V>): GameLoop<V> {
     return true;
   };
 
+  const gapMs = o.gapMs ?? GAP_MS;
+
   const frame = (): void => {
     frameId = null;
     if (!running) return;
     const now = o.clock.now();
-    const plan = planFrame(acc, now - last);
+    const plan = planFrame(acc, now - last, gapMs);
     last = now;
     acc = plan.accMs;
     let ok = true;
     if (plan.gap) {
-      ok = run(() => flush(addTime(state, plan.extraMs), { force: true }));
+      const onGap = o.onGap;
+      if (onGap !== undefined) {
+        // Not a fault: the session runs the catch-up and starts the loop again.
+        running = false;
+        onGap(plan.extraMs);
+        return;
+      }
+      ok = run(() => catchUp(state, plan.extraMs));
     } else {
       for (let i = 0; i < plan.ticks && ok; i++) {
         // The state this tick starts from, before its actions spend x (GDD §17.4).
@@ -216,6 +252,22 @@ export function createGameLoop<V>(o: GameLoopOptions<V>): GameLoop<V> {
     enqueue(a) {
       if (hub.fault !== null) return;
       queue.push(a);
+    },
+    clearQueue() {
+      queue = [];
+    },
+    replace(s) {
+      if (hub.fault !== null) return false;
+      const problems = checkInvariants(s);
+      if (problems.length > 0) return false;
+      state = s;
+      queue = [];
+      acc = 0;
+      last = o.clock.now();
+      lastDerive = Number.NEGATIVE_INFINITY;
+      if (!derive()) return false;
+      notify();
+      return true;
     },
     start() {
       if (running || hub.fault !== null) return;

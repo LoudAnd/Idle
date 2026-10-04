@@ -1,0 +1,66 @@
+/*
+ * The Save panel (GDD §19): its five parts in a column inside the Settings panel's 32rem; text
+ * boxes and inputs fill the width; every control is at least 44 px (theme.css).
+ */
+.save-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.save-part {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-block-start: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.save-part:first-child {
+  padding-block-start: 0;
+  border-top: 0;
+}
+
+.save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.save-status:empty {
+  display: none;
+}
+
+.save-panel textarea,
+.export-box textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.export-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.export-box textarea {
+  word-break: break-all;
+}
+
+.save-file {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.save-file input[type='file'] {
+  max-width: 100%;
+}
+
+.save-actions input[type='text'] {
+  flex: 1 1 8rem;
+  min-width: 0;
+}

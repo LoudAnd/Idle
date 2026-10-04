@@ -110,3 +110,21 @@ export function contrastOf(a, b) {
   const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
 }
+
+/** The save keys a fresh game starts without (`RESET_KEYS`, src/platform/storage.ts). */
+const SAVE_KEY = /^isi\.save\.|^isi\.stats\.samples$/;
+
+/**
+ * Reloads the page as a new game (M4 persists the game, GDD §20.1): a `pagehide` listener added
+ * after the game's own removes the save keys once the game's autosave on `pagehide` has run, then
+ * the page reloads. Settings are kept.
+ */
+export async function reloadAsNewGame(page) {
+  await page.evaluate((source) => {
+    const re = new RegExp(source);
+    window.addEventListener('pagehide', () => {
+      for (const k of Object.keys(localStorage)) if (re.test(k)) localStorage.removeItem(k);
+    });
+  }, SAVE_KEY.source);
+  await page.reload();
+}

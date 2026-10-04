@@ -1,12 +1,14 @@
 // @vitest-environment node
 // GDD §21.4, §21.8: the frame planner (at most 40 ticks per frame, the rest to the pending
-// integration time, gaps over 60 s in one exact step) and the loop controller's pause on a
-// fault.
+// integration time, gaps over 60 s through advance() or the session's onGap) and the loop
+// controller: replace, clearQueue and the pause on a fault.
 import fc from 'fast-check';
 import { afterEach, describe, expect, it } from 'vitest';
 import { num } from '../../src/engine/num.ts';
 import { installTestEffect } from '../../src/engine/effects.ts';
+import { OFFLINE_CAP_S } from '../../src/engine/content/offline.ts';
 import { integrate } from '../../src/engine/integrate.ts';
+import { advance } from '../../src/engine/offline.ts';
 import { makeState, newGame, serializeState } from '../../src/engine/state.ts';
 import type { GameState } from '../../src/engine/state.ts';
 import { createErrorHub } from '../../src/platform/errors.ts';
@@ -55,7 +57,7 @@ describe('planFrame (GDD §21.4)', () => {
     expect(planFrame(10, Number.NaN)).toEqual({ ticks: 0, extraMs: 0, accMs: 10, gap: false });
   });
 
-  it('a gap above 60 s is one exact step', () => {
+  it('a gap above 60 s is handed on whole', () => {
     expect(planFrame(20, GAP_MS + 1)).toEqual({
       ticks: 0,
       extraMs: GAP_MS + 21,
@@ -117,14 +119,85 @@ describe('the game loop (GDD §21.4)', () => {
     expect(serializeState(loop.state())).toBe(serializeState(integrate(s, 5)));
   });
 
-  it('a gap over 60 s is caught up in one exact step', () => {
+  it('a gap over 60 s goes through advance() (GDD §20.2, §21.4)', () => {
     const s = makeState({ x: 10, amounts: [1] });
     const { clock, loop } = loopOn(s);
     loop.start();
     clock.frame(120_000);
-    expect(loop.state().time).toBe(120);
+    expect(loop.state().time).toBeCloseTo(120, 9);
     expect(loop.state().pendingMs).toBe(0);
-    expect(serializeState(loop.state())).toBe(serializeState(integrate(s, 120)));
+    expect(serializeState(loop.state())).toBe(serializeState(advance(s, 120)));
+    expect(loop.running).toBe(true);
+  });
+
+  it('a gap beyond the offline cap is capped at 24 h', { timeout: 30_000 }, () => {
+    const s = makeState({ x: 10, amounts: [1] });
+    const { clock, loop } = loopOn(s);
+    loop.start();
+    clock.frame(30 * 3600 * 1000);
+    expect(loop.state().time).toBeCloseTo(OFFLINE_CAP_S, 6);
+  });
+
+  it('with onGap, a gap stops the loop (not a fault) and is handed over', () => {
+    const clock = createFakeClock();
+    const gaps: number[] = [];
+    const loop = createGameLoop({
+      clock,
+      derive: (s) => s.sum.x,
+      initial: makeState({ amounts: [1] }),
+      onGap: (ms) => gaps.push(ms),
+    });
+    loop.start();
+    clock.advance(1000);
+    const before = serializeState(loop.state());
+    clock.frame(90_000);
+    expect(gaps).toEqual([90_000]);
+    expect(loop.running).toBe(false);
+    expect(loop.hub.fault).toBeNull();
+    expect(clock.pendingFrames).toBe(0);
+    expect(serializeState(loop.state())).toBe(before);
+    // The session replaces the state and starts the loop again; the gap is not counted twice.
+    loop.start();
+    clock.advance(1000);
+    expect(loop.state().time + loop.state().pendingMs / 1000).toBeCloseTo(2, 9);
+  });
+
+  it('gapMs moves the gap threshold (a dev-hook speed)', () => {
+    expect(planFrame(0, 90_000, 120_000).gap).toBe(false);
+    expect(planFrame(0, 130_000, 120_000).gap).toBe(true);
+  });
+
+  it('replace() checks the invariant, clears the queue and the accumulator, derives and notifies', () => {
+    const { clock, loop } = loopOn(makeState({ x: 100 }));
+    let notified = 0;
+    cleanups.push(loop.subscribe(() => notified++));
+    loop.start();
+    clock.advance(30); // 30 ms in the accumulator
+    loop.enqueue({ type: 'buy', tier: 1, mode: 'max' });
+    const next = makeState({ x: 5, amounts: [3] });
+    expect(loop.replace(next)).toBe(true);
+    expect(loop.state()).toBe(next);
+    expect(loop.view()?.toNumber()).toBe(5);
+    expect(notified).toBeGreaterThan(0);
+    clock.advance(50);
+    // The queued purchase was dropped, and the old accumulator did not carry over.
+    expect(loop.state().sum.bought[0]).toBe(0);
+    expect(loop.state().pendingMs).toBe(50);
+    // An invalid state is refused and nothing changes.
+    const bad = makeState({ x: 5 });
+    const kept = loop.state();
+    expect(loop.replace({ ...bad, sum: { ...bad.sum, x: num(Number.NaN) } })).toBe(false);
+    expect(loop.state()).toBe(kept);
+    expect(loop.hub.fault).toBeNull();
+  });
+
+  it('clearQueue() drops the queued actions', () => {
+    const { clock, loop } = loopOn(makeState({ x: 100 }));
+    loop.start();
+    loop.enqueue({ type: 'buy', tier: 1, mode: 'max' });
+    loop.clearQueue();
+    clock.advance(50);
+    expect(loop.state().sum.bought[0]).toBe(0);
   });
 
   it(`derives the view at most ${UI_FPS} times per second and notifies subscribers`, () => {

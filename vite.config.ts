@@ -1,10 +1,19 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vitest/config';
 import preact from '@preact/preset-vite';
+
+/** The save envelope's `gameVersion` (GDD §20.1), from package.json. */
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+  version: string;
+};
 
 export default defineConfig({
   // Relative base so the build works on GitHub Pages sub-paths and static hosts.
   base: './',
   plugins: [preact()],
+  define: {
+    __GAME_VERSION__: JSON.stringify(pkg.version),
+  },
   build: {
     outDir: 'dist',
     sourcemap: true,

@@ -1,4 +1,5 @@
 dist
+dist-playtest
 node_modules
 vendor
 public/assets
@@ -11,3 +12,7 @@ tests/arch/fixtures/tokenizer/unterminated.ts
 tests/fixtures/settings
 # A planted fixture that is deliberately not valid TSX (the string lint fails closed on it).
 tests/arch/fixtures/strings/parse-error.tsx
+# Frozen save fixtures and generated dev fixtures (GDD §21.1): written by `npm run fixtures`,
+# byte for byte, never reformatted.
+tests/fixtures/saves
+tests/fixtures/dev

@@ -8,7 +8,7 @@
 // layout checks of GDD §17.6 and §22.11 at that point, not only on the first screen:
 // - no horizontal scroll at 375 and 390 px (nor at 1280 px);
 // - the buy buttons stay put while the game runs without purchases (no sideways jumps).
-import { buttonEdges, click, expectNoScroll, failer } from './lib.mjs';
+import { buttonEdges, click, expectNoScroll, failer, reloadAsNewGame } from './lib.mjs';
 import playable from './playable.mjs';
 
 const fail = failer('m2');
@@ -28,7 +28,8 @@ export default async function m2(page, shot) {
   await playable(page, shot);
 
   await page.clock.install();
-  await page.reload();
+  // A fresh game (M4 keeps the save across a plain reload).
+  await reloadAsNewGame(page);
   await page.locator('[data-tier="1"]').waitFor({ timeout: 10_000 });
   await page.clock.pauseAt(Date.now() + 1000);
   for (let ms = 0; ms < LONG_RUN_S * 1000; ms += BUY_EVERY_MS) {

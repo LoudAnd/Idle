@@ -1,12 +1,15 @@
 /**
- * The Settings panel (GDD §19), opened by the header's Settings button in the main area. M3 has
- * two sub-tabs: Numbers (notation, precision 0–4, integer threshold) and Display (theme, UI
- * fps). Later milestones add Audio, Accessibility, Save and Credits.
+ * The Settings panel (GDD §19), opened by the header's Settings button in the main area. Its
+ * sub-tabs: Numbers (notation, precision 0–4, integer threshold), Display (theme, UI fps) and,
+ * from M4, Save (the Save panel, `SavePanel.tsx`, given as `save`). Later milestones add Audio,
+ * Accessibility and Credits. The Save section's own settings (autosave interval, offline
+ * progress, …) keep their defaults until M5 and M16 add them, so settings stay at version 1.
  *
  * Every control is a native, labelled `<select>` at least 44 px tall. A change applies at once
  * and is saved (`App.tsx`). Close (or Escape) returns the focus to the Settings button. The
  * panel is a dismiss layer, so its Escape never also closes a breakdown left open beneath it.
  */
+import type { ComponentChildren } from 'preact';
 import { useId, useState } from 'preact/hooks';
 import { useDismissLayer } from '../dismiss.ts';
 import { STRINGS } from '../strings.ts';
@@ -24,7 +27,7 @@ import {
 import type { Settings } from './settings.ts';
 import './SettingsPanel.css';
 
-type Section = 'numbers' | 'display';
+type Section = 'numbers' | 'display' | 'save';
 
 const NOTATION_KEY: Readonly<Record<Settings['notation'], StringKey>> = Object.freeze({
   scientific: 'notation.scientific',
@@ -99,12 +102,21 @@ export interface SettingsPanelProps {
   readonly onChange: (next: Settings) => void;
   readonly onClose: () => void;
   readonly paused: boolean;
+  /** The Save section's content (the Save panel); no Save tab without it. */
+  readonly save?: ComponentChildren;
 }
 
 const asNumber = (v: string): unknown => Number(v);
 const asString = (v: string): unknown => v;
 
-export function SettingsPanel({ id, settings, onChange, onClose, paused }: SettingsPanelProps) {
+export function SettingsPanel({
+  id,
+  settings,
+  onChange,
+  onClose,
+  paused,
+  save,
+}: SettingsPanelProps) {
   const prefix = `${id}-s`;
   const [section, setSection] = useState<Section>('numbers');
   // A dismiss layer (`dismiss.ts`): Escape closes Settings only, not a breakdown beneath it.
@@ -117,6 +129,7 @@ export function SettingsPanel({ id, settings, onChange, onClose, paused }: Setti
         items={[
           { id: 'numbers', label: STRINGS['settings.numbers'] },
           { id: 'display', label: STRINGS['settings.display'] },
+          ...(save === undefined ? [] : [{ id: 'save', label: STRINGS['settings.save'] }]),
         ]}
         selected={section}
         onSelect={(s) => setSection(s as Section)}
@@ -124,7 +137,16 @@ export function SettingsPanel({ id, settings, onChange, onClose, paused }: Setti
         idPrefix={prefix}
         disabled={paused}
       />
-      {section === 'numbers' ? (
+      {section === 'save' && save !== undefined ? (
+        <div
+          role="tabpanel"
+          id={panelId(prefix, 'save')}
+          aria-labelledby={tabId(prefix, 'save')}
+          class="settings-section"
+        >
+          {save}
+        </div>
+      ) : section === 'numbers' ? (
         <div
           role="tabpanel"
           id={panelId(prefix, 'numbers')}

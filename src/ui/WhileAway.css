@@ -1,0 +1,65 @@
+/*
+ * Modals (GDD §20.2): the catch-up progress and the While-away summary, centred over the page
+ * on a dimmed backdrop, at most 28rem wide and never wider than the viewport.
+ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  background: rgb(0 0 0 / 0.55);
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 28rem;
+  max-height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.modal p {
+  margin: 0;
+}
+
+.modal-bar {
+  display: block;
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.modal-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.away-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.away-table th,
+.away-table td {
+  padding: 0.25rem 0.5rem;
+  text-align: end;
+  border-bottom: 1px solid var(--surface-2);
+}
+
+.away-table th[scope='row'] {
+  text-align: start;
+  font-weight: 400;
+}

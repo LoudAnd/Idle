@@ -16,6 +16,7 @@
  */
 import { LAYER_UNLOCKS } from '../engine/content/layers.ts';
 import type { LayerUnlock } from '../engine/content/layers.ts';
+import type { GoalId } from '../engine/content/onboarding.ts';
 import { X_START } from '../engine/content/sum.ts';
 import { isValidNum, log10Floor1, log10Pos, num } from '../engine/num.ts';
 import type { Num } from '../engine/num.ts';
@@ -24,9 +25,10 @@ import type { Tier, Tuple8 } from '../engine/state.ts';
 import { tierCost } from '../engine/systems/sum.ts';
 import type { StringKey } from './strings.ts';
 
-export type BuyGoalId = `goal.g${2 | 3 | 4 | 5 | 6 | 7 | 8}`;
-export type ReachGoalId = `goal.${LayerUnlock['id']}`;
-export type GoalId = BuyGoalId | ReachGoalId;
+/** The stable goal ids are the engine's (`content/onboarding.ts`), so saves can validate them. */
+export type { GoalId };
+export type BuyGoalId = Extract<GoalId, `goal.g${number}`>;
+export type ReachGoalId = Extract<GoalId, `goal.${LayerUnlock['id']}`>;
 
 /** What a goal reads now: the previewed x and the bought counts. */
 export interface GoalContext {
@@ -67,7 +69,7 @@ function buyGoal(k: Tier): GoalDef {
 
 function reachGoal(l: LayerUnlock): GoalDef {
   return Object.freeze({
-    id: `goal.${l.id}` as const,
+    id: `goal.${l.id}` as ReachGoalId,
     kind: 'reach',
     key: 'goal.reach2',
     params: Object.freeze({ n: l.log2 }),
@@ -87,7 +89,7 @@ export const GOALS: readonly GoalDef[] = Object.freeze([
 /** Every goal id, in order. */
 export const GOAL_IDS: readonly GoalId[] = Object.freeze(GOALS.map((g) => g.id));
 
-/** True when `id` is a goal id (for validating stored memory, M4). */
+/** True when `id` is a goal id of these rules (stored memory is validated by the engine). */
 export function isGoalId(id: unknown): id is GoalId {
   return typeof id === 'string' && (GOAL_IDS as readonly string[]).includes(id);
 }

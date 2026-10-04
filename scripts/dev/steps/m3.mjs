@@ -32,6 +32,7 @@ import {
   expectNoScroll as noScroll,
   expectTapTargets as tapTargets,
   failer,
+  reloadAsNewGame,
   spills,
 } from './lib.mjs';
 import playable, { readX } from './playable.mjs';
@@ -66,8 +67,8 @@ export default async function m3(page, shot) {
   const requests = [];
   page.on('request', (r) => requests.push(r.url()));
 
-  // 1. A new game.
-  await page.reload();
+  // 1. A new game (M4 keeps the save across a plain reload).
+  await reloadAsNewGame(page);
   await page.locator('[data-tier="1"]').waitFor({ timeout: 10_000 });
   const first = await page.evaluate(() => ({
     title: document.title,
@@ -103,7 +104,7 @@ export default async function m3(page, shot) {
 
   // 3. The G2 silhouette at x = 50, on the fake clock.
   await page.clock.install();
-  await page.reload();
+  await reloadAsNewGame(page);
   await page.locator('[data-tier="1"]').waitFor({ timeout: 10_000 });
   await page.clock.pauseAt(Date.now() + 1000);
   await click(page, '[data-tier="1"] button[data-mode="one"]');
@@ -453,7 +454,7 @@ export default async function m3(page, shot) {
       })
       .catch(() => {});
     const rec = await phone.evaluate(() => {
-      const reload = document.querySelector('[data-recovery] button');
+      const reload = document.querySelector('[data-recovery] button[data-action="reload"]');
       const r = reload.getBoundingClientRect();
       const header = document.querySelector('.shell-header').getBoundingClientRect();
       return {

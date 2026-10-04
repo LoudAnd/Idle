@@ -8,10 +8,12 @@
  * it derives a view from at the UI fps. So a reveal threshold crossed in a tick whose x a queued
  * purchase spends at the next is still recorded.
  *
- * The memory lives in the UI from M3; M4 persists it in the save as validated ids
- * (`memoryToIds` / `memoryFromIds`) and hands a loaded, imported or reset game's memory to the
+ * The memory lives in the UI from M3; M4 persists it in the save as sorted id lists
+ * (`memoryToIds` / `memoryFromIds`) whose ids the engine validates (`content/onboarding.ts`,
+ * `save/validate.ts`), and the session hands a loaded, imported or reset game's memory to the
  * deriver (`reset`).
  */
+import type { OnboardingIds } from '../engine/content/onboarding.ts';
 import type { GameState } from '../engine/state.ts';
 import { previewSum } from '../engine/integrate.ts';
 import { isGoalId, mergeDone } from './goals.ts';
@@ -62,12 +64,8 @@ export function visitTab(m: OnboardingMemory, id: string): OnboardingMemory {
   return Object.freeze({ ...m, visited: new Set([...m.visited, id]) });
 }
 
-/** The memory as sorted id lists, the form M4 stores in the save. */
-export interface MemoryIds {
-  readonly revealed: readonly string[];
-  readonly done: readonly string[];
-  readonly visited: readonly string[];
-}
+/** The memory as sorted id lists, the form the save stores (`content/onboarding.ts`). */
+export type MemoryIds = OnboardingIds;
 
 export function memoryToIds(m: OnboardingMemory): MemoryIds {
   return {
@@ -82,9 +80,9 @@ const TAB_IDS: ReadonlySet<string> = new Set(TAB_DEFS.map((t) => t.id));
 const ids = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
 /**
- * The memory from stored ids. Never throws: a field that is not an array is empty, and ids this
- * build does not know (a typo, or a later build's element) are dropped. The start tabs are
- * always visited.
+ * The memory from stored ids. Saves reach it only after `validate()` has rejected unknown ids,
+ * so nothing is dropped from a loaded save; for any other input it never throws: a field that is
+ * not an array is empty, and unknown ids are dropped. The start tabs are always visited.
  */
 export function memoryFromIds(raw: unknown): OnboardingMemory {
   const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;

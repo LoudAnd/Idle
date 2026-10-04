@@ -7,3 +7,4 @@ coverage
 .vite
 playtest-output
 sim-output/
+dist-playtest

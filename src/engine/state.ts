@@ -8,7 +8,7 @@
  * - `table` caches the event-constant effect table (§21.3). It is `null` when dirty (after a
  *   purchase), is rebuilt on demand, and is never serialized.
  */
-import { ZERO, encodeNum, num } from './num.ts';
+import { ZERO, decodeNum, encodeNum, num } from './num.ts';
 import type { Num, NumCode } from './num.ts';
 import { X_START } from './content/sum.ts';
 import type { EffectTable } from './effects.ts';
@@ -116,6 +116,35 @@ export function toSerializable(s: GameState): SerializedState {
     },
     time: s.time,
     pendingMs: s.pendingMs,
+  };
+}
+
+/**
+ * The state of a serialized form (GDD §20.1), for saves that passed `validate()` (which checks
+ * every code and count). The effect table starts dirty. Throws on a code `decodeNum` refuses, so
+ * an unvalidated input can never become a state with a silently replaced value; the save
+ * pipeline (`save/envelope.ts`) validates first and catches.
+ */
+export function fromSerializable(raw: SerializedState): GameState {
+  const code = (c: unknown, path: string): Num => {
+    const n = decodeNum(c);
+    if (n === null) throw new Error(`${path}: not a canonical Num code`);
+    return n;
+  };
+  const { sum } = raw;
+  if (sum.amounts.length !== 8 || sum.bought.length !== 8) {
+    throw new Error('sum: not 8 tiers');
+  }
+  return {
+    sum: {
+      x: code(sum.x, 'sum.x'),
+      amounts: map8((i) => code(sum.amounts[i], `sum.amounts[${i}]`)),
+      bought: map8((i) => sum.bought[i] as number),
+      globalLevel: sum.globalLevel,
+    },
+    time: raw.time,
+    pendingMs: raw.pendingMs,
+    table: null,
   };
 }
 

@@ -14,15 +14,16 @@
  */
 import { LAYER_UNLOCKS } from '../engine/content/layers.ts';
 import type { LayerUnlock } from '../engine/content/layers.ts';
+import type { RevealId } from '../engine/content/onboarding.ts';
 import { isValidNum } from '../engine/num.ts';
 import type { Num } from '../engine/num.ts';
 import { globalCost, tierCost } from '../engine/systems/sum.ts';
 import type { Tier, Tuple8 } from '../engine/state.ts';
 
-export type TierRevealId =
-  'tier.2' | 'tier.3' | 'tier.4' | 'tier.5' | 'tier.6' | 'tier.7' | 'tier.8';
-export type LayerRevealId = `tab.${LayerUnlock['id']}`;
-export type RevealId = TierRevealId | 'global' | 'maxAll' | LayerRevealId;
+/** The stable reveal ids are the engine's (`content/onboarding.ts`), so saves can validate them. */
+export type { RevealId };
+export type TierRevealId = Extract<RevealId, `tier.${number}`>;
+export type LayerRevealId = Extract<RevealId, `tab.${LayerUnlock['id']}`>;
 
 /** What a reveal reads: the previewed x, the bought counts and the global level. */
 export interface RevealContext {
@@ -57,7 +58,11 @@ function rule(id: RevealId, threshold: Num, extra: Extra = {}): RevealRule {
 
 /** A layer tab: revealed at 2^(n−1) of its 2^n unlock (M5, M13, M21 add their reset counts). */
 function layerRule(l: LayerUnlock): RevealRule {
-  return Object.freeze({ id: `tab.${l.id}` as const, threshold: l.threshold, half: l.half });
+  return Object.freeze({
+    id: `tab.${l.id}` as LayerRevealId,
+    threshold: l.threshold,
+    half: l.half,
+  });
 }
 
 const LATER_TIERS: readonly Tier[] = [3, 4, 5, 6, 7, 8];
@@ -87,7 +92,7 @@ export const REVEAL_RULES: readonly RevealRule[] = Object.freeze([
 /** Every reveal id, in rule order. */
 export const REVEAL_IDS: readonly RevealId[] = Object.freeze(REVEAL_RULES.map((r) => r.id));
 
-/** True when `id` is a reveal id (for validating stored memory, M4). */
+/** True when `id` is a reveal id of these rules (stored memory is validated by the engine). */
 export function isRevealId(id: unknown): id is RevealId {
   return typeof id === 'string' && (REVEAL_IDS as readonly string[]).includes(id);
 }

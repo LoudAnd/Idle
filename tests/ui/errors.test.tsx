@@ -1,6 +1,8 @@
 // GDD §21.8 (jsdom): a test-only effect that throws or returns NaN, an uncaught error and an
-// unhandled rejection each pause the loop and open the recovery panel; a render error in one tab
-// replaces only that tab, and the engine keeps running.
+// unhandled rejection each pause the loop and open the recovery panel, and no save is written
+// after the fault; the panel offers Export current (unverified), Export last good (the stored
+// save, byte for byte) and Reload; a render error in one tab replaces only that tab, and the
+// engine keeps running.
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/preact';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { num } from '../../src/engine/num.ts';
@@ -8,6 +10,8 @@ import { installTestEffect } from '../../src/engine/effects.ts';
 import type { EffectDef } from '../../src/engine/effects.ts';
 import { makeState, serializeState } from '../../src/engine/state.ts';
 import { createErrorHub, installGlobalHandlers } from '../../src/platform/errors.ts';
+import { KEYS } from '../../src/platform/storage.ts';
+import { createStorageArea } from '../unit/support/fakeStorage.ts';
 import { TabBoundary } from '../../src/ui/Recovery.tsx';
 import { STRINGS } from '../../src/ui/strings.ts';
 import { setupApp } from './support/app.tsx';
@@ -39,9 +43,13 @@ function setup() {
   cleanups.push(installGlobalHandlers(window, hub));
   // x = 1e30 reveals every row, so the paused screen has every kind of control; A1 = 1e30
   // keeps x growing visibly (2e30/s).
-  const ctx = setupApp(makeState({ x: '1e30', amounts: ['1e30', 1], bought: [5, 1] }), { hub });
+  const area = createStorageArea();
+  const ctx = setupApp(makeState({ x: '1e30', amounts: ['1e30', 1], bought: [5, 1] }), {
+    hub,
+    storage: area.connect(window),
+  });
   ctx.advance(500);
-  return { ...ctx, hub };
+  return { ...ctx, hub, area };
 }
 
 function effect(id: string, value: EffectDef['value'], cls: EffectDef['class']): EffectDef {
@@ -60,6 +68,11 @@ function effect(id: string, value: EffectDef['value'], cls: EffectDef['class']):
 function expectPausedWithPanel(ctx: ReturnType<typeof setup>): void {
   expect(ctx.loop.running).toBe(false);
   expect(ctx.hub.fault).not.toBeNull();
+  // No save is written after the fault: not by Save now, autosave, hide or pagehide.
+  const stored = ctx.area.snapshot();
+  expect(ctx.session!.saveNow().ok).toBe(false);
+  window.dispatchEvent(new Event('pagehide'));
+  expect(ctx.area.snapshot()).toEqual(stored);
   // Paused: nothing changes over another second.
   const kept = serializeState(ctx.loop.state());
   ctx.advance(1000);
@@ -112,6 +125,44 @@ describe('recovery (GDD §21.8)', () => {
     expectPausedWithPanel(ctx);
     // The last good view is still shown: x is a number.
     expect(ctx.container.querySelector('[data-x]')?.textContent).toMatch(/\d/);
+  });
+
+  it('the recovery panel offers Export current, Export last good (equal to the stored save) and Reload', () => {
+    const ctx = setup();
+    const stored = ctx.area.data.get(KEYS.a);
+    expect(stored).toMatch(/^ISI1u:/);
+    cleanups.push(installTestEffect(effect('test.nan', () => num(Number.NaN), 'event')));
+    ctx.advance(1000);
+    const panel = screen.getByRole('alert');
+    const current = panel.querySelector<HTMLButtonElement>('[data-action="export-current"]')!;
+    const lastGood = panel.querySelector<HTMLButtonElement>('[data-action="export-last-good"]')!;
+    expect(current.textContent).toBe(STRINGS['recovery.exportCurrent']);
+    expect(lastGood.textContent).toBe(STRINGS['recovery.exportLastGood']);
+    expect(lastGood.disabled).toBe(false);
+    // Reload keeps the focus.
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: STRINGS['recovery.reload'] }),
+    );
+    fireEvent.click(lastGood);
+    const box = () => panel.querySelector<HTMLTextAreaElement>('[data-export-text]')!;
+    expect(box().value).toBe(stored);
+    expect(box().value).toBe(ctx.area.data.get(KEYS.a));
+    fireEvent.click(current);
+    expect(box().value).toMatch(/^ISI1u:/);
+    expect(panel.textContent).toContain(STRINGS['recovery.unverified']);
+    // The stored save is unchanged.
+    expect(ctx.area.data.get(KEYS.a)).toBe(stored);
+  });
+
+  it('Export last good is disabled when nothing was ever saved', () => {
+    const hub = createErrorHub();
+    const ctx = setupApp(makeState({ x: 10 }), { hub, start: false });
+    act(() => hub.report({ kind: 'error' }));
+    const lastGood = screen
+      .getByRole('alert')
+      .querySelector<HTMLButtonElement>('[data-action="export-last-good"]')!;
+    expect(lastGood.disabled).toBe(true);
+    expect(ctx.container.querySelector('[data-action="export-current"]')).not.toBeNull();
   });
 
   it('an open breakdown closes on a fault, so Reload is the only thing left to act on', () => {

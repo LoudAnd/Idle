@@ -16,19 +16,28 @@
  *   tab's is visually hidden and names the panel while there is no tab list).
  * - **Hotkeys** (§18) are installed on `window` for the app's lifetime.
  * - **On a fault** (§21.8) the last good view stays on screen, paused: every control is disabled
- *   and the focus moves to the recovery panel's Reload, the only control that still acts.
+ *   and the focus moves to the recovery panel's Reload, the only control that still acts. The
+ *   panel offers Export current and Export last good from the session (M4).
+ * - **The session** (M4, `platform/session.ts`; optional, so tests can render without one):
+ *   the chrome banners (storage, newer save, load fallback, another tab), the catch-up progress
+ *   and While-away modals, and the Settings panel's Save section. While the session is not
+ *   active (another tab owns the save, or a catch-up runs) every game control is disabled
+ *   exactly as when paused.
  */
 import { useEffect, useId, useMemo, useRef, useState } from 'preact/hooks';
 import type { ErrorHub, Fault } from '../platform/errors.ts';
 import type { GameLoop } from '../platform/loop.ts';
-import { createSettingsStore } from '../platform/settingsStore.ts';
-import type { SettingsStore } from '../platform/settingsStore.ts';
+import type { Session, SessionView } from '../platform/session.ts';
+import { createSettingsStore } from '../platform/storage.ts';
+import type { SettingsStore } from '../platform/storage.ts';
 import { FormatContext } from './fmt.ts';
 import { installHotkeys } from './hotkeys.ts';
 import { Recovery, TabBoundary } from './Recovery.tsx';
+import { SavePanel } from './settings/SavePanel.tsx';
 import { SettingsPanel } from './settings/SettingsPanel.tsx';
 import { DEFAULT_SETTINGS, formatOptions, settingsBlob } from './settings/settings.ts';
 import type { Settings } from './settings/settings.ts';
+import { Banners } from './shell/Banners.tsx';
 import { Header } from './shell/Header.tsx';
 import { Layout } from './shell/Layout.tsx';
 import { Tabs, panelId, tabId } from './shell/Tabs.tsx';
@@ -36,6 +45,7 @@ import { visibleTabs } from './shell/tabs.ts';
 import type { ShellDeriver, ShellView } from './shell/view.ts';
 import { STRINGS } from './strings.ts';
 import { SumTab } from './sum/SumTab.tsx';
+import { OfflineProgress, WhileAway } from './WhileAway.tsx';
 
 const TAB_SUM = 'sum';
 const TABS_ID = 'tabs';
@@ -58,6 +68,16 @@ function useFault(hub: ErrorHub): Fault | null {
   return fault;
 }
 
+/** What the App uses of the session. */
+export type AppSession = Omit<Session, 'id' | 'loaded' | 'attach' | 'start' | 'onGap' | 'dispose'>;
+
+/** Re-renders when the session changes and returns its current view (`null` without one). */
+function useSession(session: AppSession | undefined): SessionView | null {
+  const [, setVersion] = useState(0);
+  useEffect(() => session?.subscribe(() => setVersion((n) => n + 1)), [session]);
+  return session?.view() ?? null;
+}
+
 function reloadPage(): void {
   window.location.reload();
 }
@@ -70,6 +90,8 @@ export interface AppProps {
   readonly initialSettings?: Settings;
   /** Where settings changes are stored (default: memory only). */
   readonly settingsStore?: SettingsStore;
+  /** The save session (M4); without it there are no saves, banners or modals. */
+  readonly session?: AppSession;
   readonly onReload?: () => void;
 }
 
@@ -78,6 +100,7 @@ export function App({
   shell,
   initialSettings = DEFAULT_SETTINGS,
   settingsStore,
+  session,
   onReload = reloadPage,
 }: AppProps) {
   const store = useMemo(() => settingsStore ?? createSettingsStore(null), [settingsStore]);
@@ -85,10 +108,19 @@ export function App({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState(TAB_SUM);
   const settingsButton = useRef<HTMLButtonElement>(null);
+  /** The focused element before a catch-up or While-away modal opened (focus returns there). */
+  const modalOpener = useRef<Element | null>(null);
   const sumHeading = useId();
   const view = useGameView(loop);
   const fault = useFault(loop.hub);
+  const sessionView = useSession(session);
   const paused = fault !== null;
+  // Not active (another tab owns the save, or a catch-up runs): disabled as when paused.
+  const locked = paused || (sessionView !== null && !sessionView.active);
+  // Read during render, before this render disables the controls (which drops their focus).
+  const modalOpen = sessionView?.catchUp != null || sessionView?.away != null;
+  if (!modalOpen) modalOpener.current = null;
+  else if (modalOpener.current === null) modalOpener.current = document.activeElement;
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
@@ -127,7 +159,7 @@ export function App({
         label={STRINGS['tabs.label']}
         idPrefix={TABS_ID}
         orientation="vertical"
-        disabled={paused}
+        disabled={locked}
       />
     ) : null;
   /** A tab panel's attributes: labelled by its tab, or by its own heading without a tab list. */
@@ -150,12 +182,24 @@ export function App({
             settingsPanelId={SETTINGS_PANEL}
             onSettings={() => (settingsOpen ? closeSettings() : setSettingsOpen(true))}
             settingsRef={settingsButton}
-            paused={paused}
+            paused={locked}
           />
+        }
+        banners={
+          session !== undefined && sessionView !== null ? (
+            <Banners view={sessionView} session={session} paused={paused} />
+          ) : null
         }
         tabs={tabList}
       >
-        {fault !== null && <Recovery onReload={onReload} focusOnMount />}
+        {fault !== null && (
+          <Recovery
+            onReload={onReload}
+            focusOnMount
+            exportCurrent={session?.exportCurrent}
+            exportLastGood={session?.lastGood}
+          />
+        )}
         {settingsOpen && (
           <TabBoundary onReload={onReload}>
             <SettingsPanel
@@ -163,7 +207,12 @@ export function App({
               settings={settings}
               onChange={changeSettings}
               onClose={closeSettings}
-              paused={paused}
+              paused={locked}
+              save={
+                session !== undefined && sessionView !== null ? (
+                  <SavePanel session={session} view={sessionView} disabled={locked} />
+                ) : undefined
+              }
             />
           </TabBoundary>
         )}
@@ -175,11 +224,20 @@ export function App({
               {STRINGS['tab.sum']}
             </h2>
             <TabBoundary onReload={onReload}>
-              <SumTab view={view.sum} enqueue={loop.enqueue} paused={paused} />
+              <SumTab view={view.sum} enqueue={loop.enqueue} paused={locked} />
             </TabBoundary>
           </section>
         )}
       </Layout>
+      {sessionView?.catchUp != null && <OfflineProgress progress={sessionView.catchUp} />}
+      {sessionView?.catchUp == null && sessionView?.away != null && session !== undefined && (
+        <WhileAway
+          summary={sessionView.away}
+          revealed={view?.revealed ?? []}
+          onClose={session.dismissAway}
+          returnFocus={modalOpener.current}
+        />
+      )}
     </FormatContext.Provider>
   );
 }

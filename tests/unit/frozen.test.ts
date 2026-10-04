@@ -19,6 +19,14 @@ import {
 } from '../../src/engine/content/sum.ts';
 import { GLOBAL_PRICE, globalCost } from '../../src/engine/systems/sum.ts';
 import { encodeNum, num } from '../../src/engine/num.ts';
+import {
+  OFFLINE_BISECT_ITERATIONS,
+  OFFLINE_CAPS_S,
+  OFFLINE_CAP_S,
+  OFFLINE_FINE_STEP_S,
+  OFFLINE_MAX_STEPS,
+  OFFLINE_STEP_GROWTH,
+} from '../../src/engine/content/offline.ts';
 
 describe('frozen after M2 (GDD §14.3)', () => {
   it('snapshots every M2 constant', () => {
@@ -51,5 +59,18 @@ describe('frozen after M2 (GDD §14.3)', () => {
       expect(Object.isFrozen(t)).toBe(true);
     }
     for (const e of SUM_EFFECTS) expect(Object.isFrozen(e)).toBe(true);
+  });
+});
+
+describe('frozen after M4 (GDD §14.3)', () => {
+  it('snapshots every M4 constant', () => {
+    expect(OFFLINE_FINE_STEP_S).toBe(0.05);
+    expect(OFFLINE_STEP_GROWTH).toBe(1.01);
+    expect(OFFLINE_MAX_STEPS).toBe(2000);
+    expect(OFFLINE_BISECT_ITERATIONS).toBe(100);
+    expect(OFFLINE_CAP_S).toBe(24 * 3600);
+    // The longer caps belong to M13 (72 h) and M21 (7 days); their values are fixed by §20.2.
+    expect(OFFLINE_CAPS_S).toEqual({ base: 86_400, power72: 259_200, tower7d: 604_800 });
+    expect(Object.isFrozen(OFFLINE_CAPS_S)).toBe(true);
   });
 });

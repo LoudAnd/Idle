@@ -1,7 +1,7 @@
 /**
  * Settings v1 (GDD §19): the Numbers and Display settings of M3, their defaults, per-field
  * validation, migrations and the stored form `{ settingsVersion, values }` (key `isi.settings`,
- * `src/platform/settingsStore.ts`).
+ * `src/platform/storage.ts`).
  *
  * | Field          | Values                                               | Default      |
  * | -------------- | ---------------------------------------------------- | ------------ |

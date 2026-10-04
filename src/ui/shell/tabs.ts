@@ -11,6 +11,10 @@ import type { RevealId } from '../reveal.ts';
 import type { StringKey } from '../strings.ts';
 
 export interface TabDef {
+  /**
+   * A stable tab id: visited tabs are stored in the save, so a shipped tab's id is listed in
+   * the engine's `TAB_IDS` (`content/onboarding.ts`; `tests/unit/onboarding-ids.test.ts`).
+   */
   readonly id: string;
   readonly labelKey: StringKey;
   /** The reveal that shows the tab, or `null` for a tab shown from the start. */

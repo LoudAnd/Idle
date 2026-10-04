@@ -7,7 +7,8 @@
  *
  * M1 added the notation tables that `src/engine/format.ts` takes as a parameter; M2 the chrome
  * labels of the first playable screen; M3 the shell, the onboarding framework (Next goal,
- * breakdown, time-to-afford) and Settings. This file has no runtime imports, so Node can load
+ * breakdown, time-to-afford) and Settings; M4 the Save panel, the banners, While away and the
+ * recovery exports. This file has no runtime imports, so Node can load
  * it directly.
  */
 import type { NotationTables } from '../engine/format.ts';
@@ -106,6 +107,56 @@ export const STRINGS = {
   // Recovery (GDD §21.8).
   'recovery.title': 'Error',
   'recovery.reload': 'Reload',
+  'recovery.exportCurrent': 'Export current',
+  'recovery.exportLastGood': 'Export last good',
+  'recovery.unverified': 'Unverified',
+  // The Save panel (GDD §19, §20.1).
+  'settings.save': 'Save',
+  'save.now': 'Save now',
+  'save.saved': 'Saved',
+  'save.failed': 'Not saved',
+  'save.export': 'Export',
+  'save.exportText': 'Save text',
+  'save.copy': 'Copy',
+  'save.copied': 'Copied',
+  'save.download': 'Download',
+  'save.import': 'Import',
+  'save.importText': 'Paste a save',
+  'save.importFile': 'Import from file',
+  'save.imported': 'Imported',
+  'save.notASave': 'Not a save',
+  'save.invalid': 'Invalid save',
+  'save.newer': 'Newer save version',
+  'save.restore': 'Restore backup',
+  'save.backupAt': 'Backup {t}',
+  'save.quarantine': 'Download quarantine',
+  'save.reset': 'Hard reset',
+  'save.resetWord': 'RESET',
+  'save.resetType': 'Type {w}',
+  confirm: 'Confirm',
+  cancel: 'Cancel',
+  // Chrome banners (GDD §20.1).
+  'banner.storage': 'Storage unavailable',
+  'banner.quota': 'Storage full',
+  'banner.fallback': 'Loaded from {source}',
+  'banner.source.other': 'other slot',
+  'banner.source.backup': 'backup',
+  'banner.source.new': 'new game',
+  'banner.newer': 'Newer save version',
+  'banner.tab': 'Open in another tab',
+  'banner.useHere': 'Use here',
+  'banner.label': 'Notices',
+  // Offline progress (GDD §20.2).
+  'away.title': 'While away',
+  'away.time': '+{t}',
+  'away.before': 'Before',
+  'away.after': 'After',
+  'away.progress': 'Catching up',
+  // Timestamps and file names (GDD §19): local YYYY-MM-DD HH:MM.
+  'time.stamp': '{y}-{mo}-{d} {h}:{mi}',
+  'file.save': 'isi-save-{t}.txt',
+  'file.quarantine': 'isi-quarantine.txt',
+  'file.current': 'isi-unverified-{t}.txt',
 } as const satisfies Record<string, string>;
 
 export type StringKey = keyof typeof STRINGS;
